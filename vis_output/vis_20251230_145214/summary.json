@@ -1,0 +1,15 @@
+{
+  "timestamp": "2025-12-30T14:52:34.282635",
+  "data_root": "/data/zahra/v2x",
+  "output_dir": "./vis_output/vis_20251230_145214",
+  "total_samples": 5,
+  "successful": 5,
+  "failed": [],
+  "sample_ids": [
+    "000000",
+    "000001",
+    "000002",
+    "000003",
+    "000004"
+  ]
+}

@@ -1,0 +1,12 @@
+Pedestrian_AP@0.5: 30.36
+Pedestrian_AP@0.7: 11.71
+Cyclist_AP@0.5: 13.81
+Cyclist_AP@0.7: 4.55
+Car_AP@0.5: 45.21
+Car_AP@0.7: 44.35
+Motorcyclist_AP@0.5: 16.89
+Motorcyclist_AP@0.7: 12.96
+Trafficcone_AP@0.5: 36.95
+Trafficcone_AP@0.7: 9.09
+mAP@0.5: 28.65
+mAP@0.7: 16.53

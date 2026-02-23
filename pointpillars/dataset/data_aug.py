@@ -9,22 +9,36 @@ from pointpillars.utils import bbox3d2bevcorners, box_collision_test, read_point
 
 def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
     '''
-    CLASSES: dict(Pedestrian=0, Cyclist=1, Car=2)
+    CLASSES: dict(Pedestrian=0, Cyclist=1, Car=2, ...)
     data_root: str, data root
     data_dict: dict(pts, gt_bboxes_3d, gt_labels, gt_names, difficulty)
-    db_infos: dict(Pedestrian, Cyclist, Car, ...)
+    db_sampler: dict of BaseSampler
+    sample_groups: dict(Car=5, Pedestrian=3, ...)
     return: data_dict
     '''
+    # Skip if no samplers available
+    if not db_sampler:
+        return data_dict
+    
     pts, gt_bboxes_3d = data_dict['pts'], data_dict['gt_bboxes_3d']
     gt_labels, gt_names = data_dict['gt_labels'], data_dict['gt_names']
     gt_difficulty = data_dict['difficulty']
     image_info, calib_info = data_dict['image_info'], data_dict['calib_info']
 
+    # Handle empty gt case
+    if len(gt_bboxes_3d) == 0:
+        gt_bboxes_3d = np.zeros((0, 7), dtype=np.float32)
+
     sampled_pts, sampled_names, sampled_labels = [], [], []
     sampled_bboxes, sampled_difficulty = [], []
 
     avoid_coll_boxes = copy.deepcopy(gt_bboxes_3d)
+    
     for name, v in sample_groups.items():
+        # Skip if no sampler for this class
+        if name not in db_sampler:
+            continue
+            
         # 1. calculate sample numbers
         sampled_num = v - np.sum(gt_names == name)
         if sampled_num <= 0:
@@ -32,7 +46,26 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
 
         # 2. sample databases bboxes
         sampled_cls_list = db_sampler[name].sample(sampled_num)
+        if len(sampled_cls_list) == 0:
+            continue
+            
         sampled_cls_bboxes = np.array([item['box3d_lidar'] for item in sampled_cls_list], dtype=np.float32)
+
+        # Handle empty avoid_coll_boxes
+        if len(avoid_coll_boxes) == 0:
+            avoid_coll_boxes = sampled_cls_bboxes.copy()
+            for cur_sample in sampled_cls_list:
+                pt_path = os.path.join(data_root, cur_sample['path'])
+                if not os.path.exists(pt_path):
+                    continue
+                sampled_pts_cur = read_points(pt_path)
+                sampled_pts_cur[:, :3] += cur_sample['box3d_lidar'][:3]
+                sampled_pts.append(sampled_pts_cur)
+                sampled_names.append(cur_sample['name'])
+                sampled_labels.append(CLASSES[cur_sample['name']])
+                sampled_bboxes.append(cur_sample['box3d_lidar'])
+                sampled_difficulty.append(int(cur_sample.get('difficulty', 0)))
+            continue
 
         # 3. box_collision_test
         avoid_coll_boxes_bv_corners = bbox3d2bevcorners(avoid_coll_boxes)
@@ -40,6 +73,7 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
         coll_query_matrix = np.concatenate([avoid_coll_boxes_bv_corners, sampled_cls_bboxes_bv_corners], axis=0)
         coll_mat = box_collision_test(coll_query_matrix, coll_query_matrix)
         n_gt, tmp_bboxes = len(avoid_coll_boxes_bv_corners), []
+        
         for i in range(n_gt, len(coll_mat)):
             if any(coll_mat[i]):
                 coll_mat[i] = False
@@ -47,6 +81,8 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
             else:
                 cur_sample = sampled_cls_list[i - n_gt]
                 pt_path = os.path.join(data_root, cur_sample['path'])
+                if not os.path.exists(pt_path):
+                    continue
                 sampled_pts_cur = read_points(pt_path)
                 sampled_pts_cur[:, :3] += cur_sample['box3d_lidar'][:3]
                 sampled_pts.append(sampled_pts_cur)
@@ -54,31 +90,32 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
                 sampled_labels.append(CLASSES[cur_sample['name']])
                 sampled_bboxes.append(cur_sample['box3d_lidar'])
                 tmp_bboxes.append(cur_sample['box3d_lidar'])
-                sampled_difficulty.append(cur_sample['difficulty'])
-        if len(tmp_bboxes) == 0:
-            tmp_bboxes = np.array(tmp_bboxes).reshape(-1, 7)
-        else:
+                sampled_difficulty.append(int(cur_sample.get('difficulty', 0)))
+                
+        if len(tmp_bboxes) > 0:
             tmp_bboxes = np.array(tmp_bboxes)
-        avoid_coll_boxes = np.concatenate([avoid_coll_boxes, tmp_bboxes], axis=0)
+            avoid_coll_boxes = np.concatenate([avoid_coll_boxes, tmp_bboxes], axis=0)
         
     # merge sampled database
-    # remove raw points in sampled_bboxes firstly
-    pts = remove_pts_in_bboxes(pts, np.stack(sampled_bboxes, axis=0))
-    # pts = np.concatenate([pts, np.concatenate(sampled_pts, axis=0)], axis=0)
-    pts = np.concatenate([np.concatenate(sampled_pts, axis=0), pts], axis=0)
-    gt_bboxes_3d = avoid_coll_boxes.astype(np.float32)
-    gt_labels = np.concatenate([gt_labels, np.array(sampled_labels)], axis=0)
-    gt_names = np.concatenate([gt_names, np.array(sampled_names)], axis=0)
-    difficulty = np.concatenate([gt_difficulty, np.array(sampled_difficulty)], axis=0)
+    if len(sampled_bboxes) > 0:
+        pts = remove_pts_in_bboxes(pts, np.stack(sampled_bboxes, axis=0))
+        pts = np.concatenate([np.concatenate(sampled_pts, axis=0), pts], axis=0)
+        gt_bboxes_3d = avoid_coll_boxes.astype(np.float32)
+        gt_labels = np.concatenate([gt_labels, np.array(sampled_labels)], axis=0)
+        gt_names = np.concatenate([gt_names, np.array(sampled_names)], axis=0)
+        difficulty = np.concatenate([gt_difficulty, np.array(sampled_difficulty)], axis=0)
+    else:
+        difficulty = gt_difficulty
+    
     data_dict = {
-            'pts': pts,
-            'gt_bboxes_3d': gt_bboxes_3d,
-            'gt_labels': gt_labels, 
-            'gt_names': gt_names,
-            'difficulty': difficulty,
-            'image_info': image_info,
-            'calib_info': calib_info
-        }
+        'pts': pts,
+        'gt_bboxes_3d': gt_bboxes_3d,
+        'gt_labels': gt_labels, 
+        'gt_names': gt_names,
+        'difficulty': difficulty,
+        'image_info': image_info,
+        'calib_info': calib_info
+    }
     return data_dict
 
 
@@ -258,6 +295,13 @@ def object_range_filter(data_dict, object_range):
     gt_bboxes_3d, gt_labels = data_dict['gt_bboxes_3d'], data_dict['gt_labels']
     gt_names, difficulty = data_dict['gt_names'], data_dict['difficulty']
 
+    # ensure all annotation arrays have same length
+    min_len = min(len(gt_bboxes_3d), len(gt_labels), len(gt_names), len(difficulty))
+    gt_bboxes_3d = gt_bboxes_3d[:min_len]
+    gt_labels    = gt_labels[:min_len]
+    gt_names     = gt_names[:min_len]
+    difficulty   = difficulty[:min_len]
+
     # bev filter
     flag_x_low = gt_bboxes_3d[:, 0] > object_range[0]
     flag_y_low = gt_bboxes_3d[:, 1] > object_range[1]
@@ -266,8 +310,10 @@ def object_range_filter(data_dict, object_range):
     keep_mask = flag_x_low & flag_y_low & flag_x_high & flag_y_high
 
     gt_bboxes_3d, gt_labels = gt_bboxes_3d[keep_mask], gt_labels[keep_mask]
-    gt_names, difficulty = gt_names[keep_mask], difficulty[keep_mask]
+    gt_names, difficulty    = gt_names[keep_mask], difficulty[keep_mask]
     gt_bboxes_3d[:, 6] = limit_period(gt_bboxes_3d[:, 6], 0.5, 2 * np.pi)
+
+    # update dictionary
     data_dict.update({'gt_bboxes_3d': gt_bboxes_3d})
     data_dict.update({'gt_labels': gt_labels})
     data_dict.update({'gt_names': gt_names})

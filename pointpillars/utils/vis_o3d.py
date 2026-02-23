@@ -1,122 +1,125 @@
-import cv2
 import numpy as np
 import open3d as o3d
+import colorsys
 import os
-from pointpillars.utils import bbox3d2corners
+from datetime import datetime
 
+# ========= AUTO COLOR GENERATOR =========
+def generate_colors(n, bright=True):
+    brightness = 1.0 if bright else 0.7
+    hsv = [(i / n, 1, brightness) for i in range(n)]
+    colors = [colorsys.hsv_to_rgb(*c) for c in hsv]
+    return colors
 
-COLORS = [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0]]
-COLORS_IMG = [[0, 0, 255], [0, 255, 0], [255, 0, 0], [0, 255, 255]]
-
+# ========= LINES for 3D BOX =========
 LINES = [
-        [0, 1],
-        [1, 2], 
-        [2, 3],
-        [3, 0],
-        [4, 5],
-        [5, 6],
-        [6, 7],
-        [7, 4],
-        [2, 6],
-        [7, 3],
-        [1, 5],
-        [4, 0]
-    ]
+    [0, 1], [1, 2], [2, 3], [3, 0],   # bottom square
+    [4, 5], [5, 6], [6, 7], [7, 4],   # top square
+    [2, 6], [7, 3], [1, 5], [4, 0]    # vertical edges
+]
 
-
+# ========= POINT CLOUD UTILS =========
 def npy2ply(npy):
     ply = o3d.geometry.PointCloud()
     ply.points = o3d.utility.Vector3dVector(npy[:, :3])
-    density = npy[:, 3]
-    colors = [[item, item, item] for item in density]
-    ply.colors = o3d.utility.Vector3dVector(colors)
+    if npy.shape[1] > 3:
+        density = npy[:, 3]
+        colors = [[item, item, item] for item in density]
+        ply.colors = o3d.utility.Vector3dVector(colors)
     return ply
 
-
-def ply2npy(ply):
-    return np.array(ply.points)
-
-
+# ========= 3D BOX OBJECT =========
 def bbox_obj(points, color=[1, 0, 0]):
-    colors = [color for i in range(len(LINES))]
+    colors = [color for _ in range(len(LINES))]
     line_set = o3d.geometry.LineSet(
         points=o3d.utility.Vector3dVector(points),
-        lines=o3d.utility.Vector2iVector(LINES),
+        lines=o3d.utility.Vector2iVector(LINES)
     )
     line_set.colors = o3d.utility.Vector3dVector(colors)
     return line_set
 
 
-def vis_core(plys):
-    vis = o3d.visualization.Visualizer()
-    vis.create_window()
+def save_boxes_txt(bboxes, labels, scores=None, save_path="boxes.txt"):
+    """
+    Save boxes to a text file:
+    Each line: x y z dx dy dz yaw class_id [score]
+    """
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with open(save_path, "w") as f:
+        for i in range(len(bboxes)):
+            box = bboxes[i]
+            label = labels[i]
+            if scores is not None:
+                score = scores[i]
+                line = " ".join([f"{v:.6f}" for v in box]) + f" {label} {score:.4f}\n"
+            else:
+                line = " ".join([f"{v:.6f}" for v in box]) + f" {label} 1.0\n"
+            f.write(line)
+    print(f"[INFO] Saved boxes to {save_path}")
 
-    PAR = os.path.dirname(os.path.abspath(__file__))
-    ctr = vis.get_view_control()
-    param = o3d.io.read_pinhole_camera_parameters(os.path.join(PAR, 'viewpoint.json'))
+# ========= OFFSCREEN RENDERER (HEADLESS) =========
+def vis_core(plys, save_path=None):
+    """
+    Offscreen visualization using Open3D's headless renderer.
+    """
+    import open3d.visualization.rendering as rendering
+    import open3d.visualization as vis
+    import numpy as np
+    import os
+
+    # Create an offscreen renderer (no X11 window required)
+    width, height = 1280, 720
+    renderer = rendering.OffscreenRenderer(width, height)
+
+    scene = renderer.scene
+    scene.set_background([0, 0, 0, 1])  # black background
+    mat = rendering.MaterialRecord()
+    mat.shader = "defaultUnlit"
+
+    # Add all geometries
     for ply in plys:
-        vis.add_geometry(ply)
-    ctr.convert_from_pinhole_camera_parameters(param)
+        scene.add_geometry("obj_" + str(id(ply)), ply, mat)
 
-    vis.run()
-    # param = vis.get_view_control().convert_to_pinhole_camera_parameters()
-    # o3d.io.write_pinhole_camera_parameters(os.path.join(PAR, 'viewpoint.json'), param)
-    vis.destroy_window()
+    # Add lighting
+    scene.scene.set_lighting(rendering.Scene.LightingProfile.SOFT_SHADOWS, (0, 0, 0))
+    scene.scene.show_axes(True)
 
-
-def vis_pc(pc, bboxes=None, labels=None):
-    '''
-    pc: ply or np.ndarray (N, 4)
-    bboxes: np.ndarray, (n, 7) or (n, 8, 3)
-    labels: (n, )
-    '''
+    # Render and save
+    img = renderer.render_to_image()
+    if save_path is not None:
+        vis.io.write_image(save_path, img)
+        print(f"[INFO] Saved visualization image to {os.path.abspath(save_path)}")
+    else:
+        print("[INFO] No save_path provided — skipping save.")
+        
+        
+# ========= MAIN VISUALIZER =========
+def vis_pc(pc, bboxes=None, labels=None, nclasses=3, save_path=None):
+    """
+    pc: np.ndarray (N,4) or open3d.geometry.PointCloud
+    bboxes: np.ndarray (n,7) or (n,8,3)
+    labels: np.ndarray (n,)
+    save_path: optional path, else auto in current dir
+    """
     if isinstance(pc, np.ndarray):
         pc = npy2ply(pc)
-    
-    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(
-    size=10, origin=[0, 0, 0])
+
+    mesh_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=10, origin=[0, 0, 0])
 
     if bboxes is None:
-        vis_core([pc, mesh_frame])
+        vis_core([pc, mesh_frame], save_path=save_path)
         return
-    
+
     if len(bboxes.shape) == 2:
+        from pointpillars.utils import bbox3d2corners
         bboxes = bbox3d2corners(bboxes)
-    
+
+    COLORS = generate_colors(nclasses)
     vis_objs = [pc, mesh_frame]
+
     for i in range(len(bboxes)):
         bbox = bboxes[i]
-        if labels is None:
-            color = [1, 1, 0]
-        else:
-            if labels[i] >= 0 and labels[i] < 3:
-                color = COLORS[labels[i]]
-            else:
-                color = COLORS[-1]
+        color = [1, 1, 0] if labels is None else COLORS[labels[i] % len(COLORS)]
         vis_objs.append(bbox_obj(bbox, color=color))
-    vis_core(vis_objs)
 
-
-def vis_img_3d(img, image_points, labels, rt=True):
-    '''
-    img: (h, w, 3)
-    image_points: (n, 8, 2)
-    labels: (n, )
-    '''
-
-    for i in range(len(image_points)):
-        label = labels[i]
-        bbox_points = image_points[i] # (8, 2)
-        if label >= 0 and label < 3:
-            color = COLORS_IMG[label]
-        else:
-            color = COLORS_IMG[-1]
-        for line_id in LINES:
-            x1, y1 = bbox_points[line_id[0]]
-            x2, y2 = bbox_points[line_id[1]]
-            x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
-            cv2.line(img, (x1, y1), (x2, y2), color, 1)
-    if rt:
-        return img
-    cv2.imshow('bbox', img)
-    cv2.waitKey(0)
+    vis_core(vis_objs, save_path=save_path)

@@ -7,3 +7,8 @@ tmp/
 results/
 *.sh
 .idea
+*.jpg
+*.pcd
+debug.py
+export_pkl_to_pcd.py
+view_pkl.py

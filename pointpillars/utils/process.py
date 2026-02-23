@@ -5,6 +5,9 @@ import random
 import torch
 import pdb
 from pointpillars.ops.iou3d_module import boxes_overlap_bev, boxes_iou_bev
+import sys
+import os
+
 
 
 def setup_seed(seed=0, deterministic = True):
@@ -743,3 +746,112 @@ def get_frustum(bbox_image, C, near_clip=0.001, far_clip=100):
                             axis=0)  # [8, 2]
     ret_xyz = np.concatenate([ret_xy, z_points], axis=1)
     return ret_xyz
+
+
+def points_in_bboxes_v2_lidar(points, dimensions, location, rotation_y, name):
+    """
+    Get indices of points in each bbox for V2X dataset.
+    Boxes are already in LiDAR coordinates.
+    
+    Args:
+        points: shape=(N, 4), point cloud
+        dimensions: shape=(n, 3), (h, w, l) in V2X format
+        location: shape=(n, 3), (x, y, z) in LiDAR coords
+        rotation_y: shape=(n,), rotation around z-axis
+        name: shape=(n,), object names
+    
+    Returns:
+        indices: shape=(N, n), indices[i, j] = True if point i is in bbox j
+        n_total_bbox: int
+        n_valid_bbox: int
+        bboxes_lidar: shape=(n, 7)
+        name: shape=(n,)
+    """
+    n_total_bbox = len(dimensions)
+    
+    # Filter out DontCare objects
+    valid_mask = np.array([n != 'DontCare' for n in name])
+    n_valid_bbox = np.sum(valid_mask)
+    
+    if n_valid_bbox == 0:
+        return (np.zeros((len(points), 0), dtype=np.bool_), 
+                n_total_bbox, 0, np.zeros((0, 7)), np.array([]))
+    
+    # Get valid objects
+    dimensions = dimensions[valid_mask]
+    location = location[valid_mask]
+    rotation_y = rotation_y[valid_mask]
+    name = name[valid_mask]
+    
+    # Convert V2X format (h, w, l) to standard format (l, w, h) for bbox3d2corners
+    # V2X dimensions: [h, w, l] -> need [w, l, h] or [l, w, h] depending on convention
+    # Looking at bbox3d2corners, it expects [w, l, h] where dims are used directly
+    # Actually the function expects (x, y, z, w, l, h, theta)
+    
+    # V2X: h=height, w=width, l=length
+    # For pointpillars/KITTI lidar frame: x=forward, y=left, z=up
+    # bbox format: [x, y, z, w, l, h, theta] where w=y_size, l=x_size, h=z_size
+    
+    # Convert h,w,l to l,w,h (length along x, width along y, height along z)
+    dims_lwh = np.stack([dimensions[:, 2],   # l (length)
+                         dimensions[:, 1],   # w (width)
+                         dimensions[:, 0]],  # h (height)
+                        axis=1)
+    
+    # Build bboxes_lidar: [x, y, z, w, l, h, theta]
+    # Note: location z might be at bottom or center, adjust if needed
+    bboxes_lidar = np.concatenate([
+        location,                    # x, y, z
+        dims_lwh,                    # l, w, h (reordered from h,w,l)
+        rotation_y[:, None]          # theta
+    ], axis=1).astype(np.float32)
+    
+    # Get corners and surfaces for point-in-box test
+    bboxes_corners = bbox3d2corners(bboxes_lidar)  # (n, 8, 3)
+    group_rect_vertexs = group_rectangle_vertexs(bboxes_corners)  # (n, 6, 4, 3)
+    frustum_surfaces = group_plane_equation(group_rect_vertexs)  # (n, 6, 4)
+    
+    # Check which points are in which boxes
+    indices = points_in_bboxes(points[:, :3], frustum_surfaces)  # (N, n)
+    
+    return indices, n_total_bbox, n_valid_bbox, bboxes_lidar, name
+
+
+def get_points_num_in_bbox_lidar(points, dimensions, location, rotation_y, name):
+    """
+    Get number of points in each bounding box for V2X dataset.
+    
+    Args:
+        points: shape=(N, 4)
+        dimensions: shape=(n, 3), (h, w, l)
+        location: shape=(n, 3), (x, y, z) in LiDAR
+        rotation_y: shape=(n,)
+        name: shape=(n,)
+    
+    Returns:
+        points_num: shape=(n,), number of points per box
+    """
+    if len(name) == 0:
+        return np.array([], dtype=np.int32)
+    
+    indices, n_total_bbox, n_valid_bbox, bboxes_lidar, valid_name = \
+        points_in_bboxes_v2_lidar(points, dimensions, location, rotation_y, name)
+    
+    if n_valid_bbox == 0:
+        return np.array([-1] * n_total_bbox, dtype=np.int32)
+    
+    # Count points per valid bbox
+    points_num = np.sum(indices, axis=0)  # shape=(n_valid_bbox,)
+    
+    # Pad with -1 for DontCare boxes
+    full_points_num = []
+    valid_idx = 0
+    for n in name:
+        if n != 'DontCare':
+            full_points_num.append(points_num[valid_idx])
+            valid_idx += 1
+        else:
+            full_points_num.append(-1)
+    
+    return np.array(full_points_num, dtype=np.int32)
+

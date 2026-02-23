@@ -1,0 +1,722 @@
+============================================================
+Sample ID: 000000
+============================================================
+
+[Image Info]
+  Shape: (1080, 1920)
+  Path: single-infrastructure-side-image/000000.jpg
+
+[Point Cloud]
+  Total points: 56285
+  X range: [0.00, 292.80]
+  Y range: [-164.99, 193.24]
+  Z range: [-26.88, 55.51]
+
+[Calibration]
+  P2:
+[[1.9982742e+03 0.0000000e+00 9.3828333e+02 0.0000000e+00]
+ [0.0000000e+00 2.2690168e+03 5.6858710e+02 0.0000000e+00]
+ [0.0000000e+00 0.0000000e+00 1.0000000e+00 0.0000000e+00]
+ [0.0000000e+00 0.0000000e+00 0.0000000e+00 1.0000000e+00]]
+  R0_rect:
+[[1. 0. 0. 0.]
+ [0. 1. 0. 0.]
+ [0. 0. 1. 0.]
+ [0. 0. 0. 1.]]
+  Tr_velo_to_cam:
+[[-3.2055020e-02 -9.9745190e-01  2.0551249e-02 -2.1904445e+00]
+ [-2.2409302e-01  2.9860416e-03 -8.7568003e-01  5.6360865e+00]
+ [ 9.7374552e-01 -4.1678350e-02 -2.0233750e-01  1.4163665e+00]
+ [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  1.0000000e+00]]
+
+[Annotations] - 69 objects
+
+  Object 0: Cyclist
+    Location (x,y,z): [ 53.00455   -19.42944    -1.7769238]
+    Dimensions (h,w,l): [1.762347 0.761443 1.649016]
+    Rotation: 1.6608 rad (95.2 deg)
+    2D BBox: [1528.7264   289.33963 1597.9944   365.0631 ]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 46
+
+  Object 1: Car
+    Location (x,y,z): [38.585045  -4.7768626 -1.703959 ]
+    Dimensions (h,w,l): [1.603673 1.892322 4.216247]
+    Rotation: -0.0232 rad (-1.3 deg)
+    2D BBox: [ 960.8947   397.07382 1069.8002   499.6146 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 189
+
+  Object 2: Car
+    Location (x,y,z): [12.816891  -7.1274285 -1.6858013]
+    Dimensions (h,w,l): [1.505857 1.826533 4.240506]
+    Rotation: 0.0445 rad (2.6 deg)
+    2D BBox: [1433.3448  1010.11145 1920.      1080.     ]
+    Truncated: 0.0
+    Occluded: 3
+    Difficulty: -1
+    Points in GT: 165
+
+  Object 3: Trafficcone
+    Location (x,y,z): [ 46.665108  -22.766203   -1.8375355]
+    Dimensions (h,w,l): [0.931562 0.32206  0.339546]
+    Rotation: -1.6905 rad (-96.9 deg)
+    2D BBox: [1799.1068  371.3562 1815.2704  407.6911]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 16
+
+  Object 4: Trafficcone
+    Location (x,y,z): [ 31.520105  -15.98932    -1.8059537]
+    Dimensions (h,w,l): [0.790759 0.386167 0.330144]
+    Rotation: -1.5692 rad (-89.9 deg)
+    2D BBox: [1768.2095   518.1898  1788.3969   573.65045]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 10
+
+  Object 5: Car
+    Location (x,y,z): [70.68976   25.695189  -1.6845837]
+    Dimensions (h,w,l): [1.427104 1.808059 4.289026]
+    Rotation: 3.1349 rad (179.6 deg)
+    2D BBox: [  0.      228.4585   56.10393 287.78635]
+    Truncated: 1.0
+    Occluded: 3
+    Difficulty: -1
+    Points in GT: 74
+
+  Object 6: Car
+    Location (x,y,z): [186.31604    16.609344   -2.1530821]
+    Dimensions (h,w,l): [1.599989 1.807107 4.289522]
+    Rotation: 3.0815 rad (176.6 deg)
+    2D BBox: [635.7421  107.98193 664.0226  132.27542]
+    Truncated: 2.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 7: Car
+    Location (x,y,z): [103.368576   15.19462    -1.7250824]
+    Dimensions (h,w,l): [1.457818 1.836144 4.301161]
+    Rotation: -3.1033 rad (-177.8 deg)
+    2D BBox: [477.3696  170.88889 528.29364 208.26753]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 7
+
+  Object 8: Car
+    Location (x,y,z): [107.23944    11.396391   -1.7331748]
+    Dimensions (h,w,l): [1.455363 1.813524 4.22857 ]
+    Rotation: -3.0965 rad (-177.4 deg)
+    2D BBox: [564.89105 162.78688 613.95734 202.93846]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 9: Car
+    Location (x,y,z): [44.521503  17.035921  -1.8069376]
+    Dimensions (h,w,l): [1.808346 1.959837 4.805234]
+    Rotation: 3.0990 rad (177.6 deg)
+    2D BBox: [  0.       309.99762   38.375576 438.4589  ]
+    Truncated: 0.0
+    Occluded: 3
+    Difficulty: -1
+    Points in GT: 73
+
+  Object 10: Car
+    Location (x,y,z): [94.540535  18.747606  -1.5474976]
+    Dimensions (h,w,l): [1.480272 1.851291 4.286164]
+    Rotation: 3.0840 rad (176.7 deg)
+    2D BBox: [347.26562 184.76962 413.91525 228.45189]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 17
+
+  Object 11: Car
+    Location (x,y,z): [64.79188   19.572088  -1.9480615]
+    Dimensions (h,w,l): [1.580362 1.786707 4.331606]
+    Rotation: 3.1175 rad (178.6 deg)
+    2D BBox: [ 93.56752 249.81625 196.9628  313.06818]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 63
+
+  Object 12: Trafficcone
+    Location (x,y,z): [ 51.053776  -22.932682   -1.8823216]
+    Dimensions (h,w,l): [0.806219 0.320595 0.391238]
+    Rotation: -1.7457 rad (-100.0 deg)
+    2D BBox: [1728.7092   344.22113 1742.4891   381.04437]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 14
+
+  Object 13: Pedestrian
+    Location (x,y,z): [ 47.80446   -25.320929   -1.9033109]
+    Dimensions (h,w,l): [1.920867 0.673432 0.445142]
+    Rotation: 3.1215 rad (178.8 deg)
+    2D BBox: [1876.415    315.39188 1913.2515   404.07162]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 32
+
+  Object 14: Car
+    Location (x,y,z): [18.223875   2.241707  -1.6694539]
+    Dimensions (h,w,l): [1.506478 2.010088 4.504988]
+    Rotation: -0.0364 rad (-2.1 deg)
+    2D BBox: [191.18286 744.50037 503.01984 987.9932 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 802
+
+  Object 15: Car
+    Location (x,y,z): [134.07314    10.8549185  -1.7064134]
+    Dimensions (h,w,l): [1.486976 1.811315 4.059739]
+    Rotation: -3.0787 rad (-176.4 deg)
+    2D BBox: [636.1207  134.67694 672.4555  168.34688]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 16: Motorcyclist
+    Location (x,y,z): [50.0388     3.9146786 -1.5807401]
+    Dimensions (h,w,l): [1.685032 0.710338 1.713686]
+    Rotation: 1.5377 rad (88.1 deg)
+    2D BBox: [568.2751  298.6209  651.4342  382.38156]
+    Truncated: 2.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 31
+
+  Object 17: Trafficcone
+    Location (x,y,z): [ 49.765354  -24.65076    -1.8496699]
+    Dimensions (h,w,l): [0.890706 0.361386 0.364884]
+    Rotation: -1.7008 rad (-97.4 deg)
+    2D BBox: [1820.698    355.3529  1833.7224   389.17523]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 12
+
+  Object 18: Car
+    Location (x,y,z): [126.665886   11.3315     -1.5259889]
+    Dimensions (h,w,l): [1.577127 1.714995 4.300775]
+    Rotation: -3.0672 rad (-175.7 deg)
+    2D BBox: [614.9479  141.23453 654.2756  175.98912]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 19: Trafficcone
+    Location (x,y,z): [ 50.070972  -19.772125   -1.7073982]
+    Dimensions (h,w,l): [0.81595  0.341102 0.35842 ]
+    Rotation: 3.0436 rad (174.4 deg)
+    2D BBox: [1615.7676   348.9153  1629.4868   383.52008]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 15
+
+  Object 20: Trafficcone
+    Location (x,y,z): [30.02311    6.8452888 -1.6738783]
+    Dimensions (h,w,l): [0.812157 0.303089 0.316817]
+    Rotation: -1.5461 rad (-88.6 deg)
+    2D BBox: [223.36877 537.3665  246.12337 597.3836 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 6
+
+  Object 21: Car
+    Location (x,y,z): [85.17141   25.325289  -1.6948913]
+    Dimensions (h,w,l): [1.515773 1.892019 4.215637]
+    Rotation: 3.0616 rad (175.4 deg)
+    2D BBox: [117.99734 196.91533 196.95291 244.04651]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 37
+
+  Object 22: Car
+    Location (x,y,z): [52.030846  -4.8974147 -1.6622598]
+    Dimensions (h,w,l): [1.504021 1.817628 4.230692]
+    Rotation: 0.0044 rad (0.3 deg)
+    2D BBox: [ 944.97876  305.0074  1022.4069   381.29913]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 147
+
+  Object 23: Car
+    Location (x,y,z): [112.41399   14.914968  -1.577237]
+    Dimensions (h,w,l): [1.601221 1.927732 4.318519]
+    Rotation: -3.0918 rad (-177.1 deg)
+    2D BBox: [508.57532 157.48679 554.63135 191.66466]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 24: Cyclist
+    Location (x,y,z): [ 46.12427  -21.39284   -1.790801]
+    Dimensions (h,w,l): [1.641306 0.652226 1.801214]
+    Rotation: -0.0482 rad (-2.8 deg)
+    2D BBox: [1738.5448   331.81583 1781.9067   418.4739 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 62
+
+  Object 25: Car
+    Location (x,y,z): [59.984924  12.44807   -1.6683654]
+    Dimensions (h,w,l): [1.983731 2.088147 4.574316]
+    Rotation: 3.1143 rad (178.4 deg)
+    2D BBox: [286.35614 238.32584 389.2852  328.7525 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 176
+
+  Object 26: Trafficcone
+    Location (x,y,z): [ 29.16156   -15.834765   -1.7527198]
+    Dimensions (h,w,l): [0.808481 0.282801 0.327562]
+    Rotation: -1.6071 rad (-92.1 deg)
+    2D BBox: [1829.3976   551.10034 1850.1467   614.6113 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 12
+
+  Object 27: Pedestrian
+    Location (x,y,z): [ 44.149376  -22.659794   -1.8695832]
+    Dimensions (h,w,l): [1.714419 0.7972   0.548098]
+    Rotation: -0.0138 rad (-0.8 deg)
+    2D BBox: [1833.2087  344.2212 1872.1173  429.7928]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 41
+
+  Object 28: Motorcyclist
+    Location (x,y,z): [78.19169   -6.360986  -1.6725745]
+    Dimensions (h,w,l): [1.627583 0.965981 1.893879]
+    Rotation: -0.0251 rad (-1.4 deg)
+    2D BBox: [972.3566  210.11081 999.4875  266.2534 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 33
+
+  Object 29: Car
+    Location (x,y,z): [45.003525  12.873861  -1.7214774]
+    Dimensions (h,w,l): [1.527819 1.969519 4.472959]
+    Rotation: 3.0939 rad (177.3 deg)
+    2D BBox: [ 84.67875 328.67502 229.40347 421.37842]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 253
+
+  Object 30: Car
+    Location (x,y,z): [20.284515  -3.8515134 -1.666846 ]
+    Dimensions (h,w,l): [1.496707 1.836898 4.329823]
+    Rotation: -0.0071 rad (-0.4 deg)
+    2D BBox: [ 938.4893   696.64136 1144.0663   925.18506]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 521
+
+  Object 31: Car
+    Location (x,y,z): [37.002686  -7.9101253 -1.7273141]
+    Dimensions (h,w,l): [1.526964 1.836558 4.170038]
+    Rotation: -0.0611 rad (-3.5 deg)
+    2D BBox: [1138.5421   408.60852 1269.674    520.52264]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 205
+
+  Object 32: Car
+    Location (x,y,z): [24.13202   -1.0161203 -1.698283 ]
+    Dimensions (h,w,l): [1.64606  1.854208 4.226549]
+    Rotation: -0.0357 rad (-2.0 deg)
+    2D BBox: [662.86993 597.5092  841.6691  788.1085 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 416
+
+  Object 33: Bus
+    Location (x,y,z): [99.89415   25.06249   -1.6505879]
+    Dimensions (h,w,l): [ 3.023198  2.510374 11.9977  ]
+    Rotation: -3.1296 rad (-179.3 deg)
+    2D BBox: [202.52528 113.95057 324.52637 229.40036]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 59
+
+  Object 34: Pedestrian
+    Location (x,y,z): [ 44.610756  -24.163729   -1.8770165]
+    Dimensions (h,w,l): [1.669879 0.605253 0.691126]
+    Rotation: -3.0354 rad (-173.9 deg)
+    2D BBox: [1887.917    343.4419  1920.       428.67957]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 38
+
+  Object 35: Car
+    Location (x,y,z): [95.46837   15.531534  -1.4867437]
+    Dimensions (h,w,l): [1.521141 1.965599 3.820374]
+    Rotation: 3.1381 rad (179.8 deg)
+    2D BBox: [429.95654 174.09856 492.18756 224.88393]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 47
+
+  Object 36: Trafficcone
+    Location (x,y,z): [ 46.761105  -20.474363   -1.8654385]
+    Dimensions (h,w,l): [0.804511 0.369617 0.399662]
+    Rotation: 3.1151 rad (178.5 deg)
+    2D BBox: [1695.6095   369.60605 1712.1512   409.18353]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 13
+
+  Object 37: Cyclist
+    Location (x,y,z): [ 85.706085 -24.36561   -1.475298]
+    Dimensions (h,w,l): [1.119956 0.773954 1.886468]
+    Rotation: 1.5560 rad (89.2 deg)
+    2D BBox: [1418.7294   199.31894 1467.9651   237.849  ]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 18
+
+  Object 38: Trafficcone
+    Location (x,y,z): [ 52.766098 -21.19306   -1.793715]
+    Dimensions (h,w,l): [0.816022 0.311468 0.354883]
+    Rotation: -1.6516 rad (-94.6 deg)
+    2D BBox: [1637.5623   333.0242  1651.587    367.17914]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 13
+
+  Object 39: Car
+    Location (x,y,z): [97.90273   11.79737   -1.8001876]
+    Dimensions (h,w,l): [1.695392 1.803307 4.131455]
+    Rotation: -3.1318 rad (-179.4 deg)
+    2D BBox: [522.48    170.97131 580.311   218.3894 ]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 36
+
+  Object 40: Trafficcone
+    Location (x,y,z): [ 48.305485  -19.859135   -1.8454183]
+    Dimensions (h,w,l): [0.976139 0.370955 0.344626]
+    Rotation: 0.0512 rad (2.9 deg)
+    2D BBox: [1641.0271   356.4759  1655.6895   394.24603]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 14
+
+  Object 41: Car
+    Location (x,y,z): [121.97006    14.717409   -1.5082165]
+    Dimensions (h,w,l): [1.498425 1.831362 4.284457]
+    Rotation: -3.0692 rad (-175.9 deg)
+    2D BBox: [547.00995 147.76642 581.23914 179.72853]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 42: Trafficcone
+    Location (x,y,z): [ 52.093945  -19.85378    -1.7782024]
+    Dimensions (h,w,l): [0.796494 0.338961 0.393724]
+    Rotation: -1.5659 rad (-89.7 deg)
+    2D BBox: [1591.213    336.8265  1604.0277   371.79077]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 13
+
+  Object 43: Car
+    Location (x,y,z): [85.382065  19.130962  -1.9558882]
+    Dimensions (h,w,l): [1.721694 1.93927  4.225053]
+    Rotation: 3.0886 rad (177.0 deg)
+    2D BBox: [284.566   190.49321 358.64963 241.75282]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 43
+
+  Object 44: Car
+    Location (x,y,z): [113.51999    10.996259   -1.7244002]
+    Dimensions (h,w,l): [1.779783 1.812072 4.153193]
+    Rotation: -3.0680 rad (-175.8 deg)
+    2D BBox: [590.06525 154.79077 630.6363  191.92448]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 45: Car
+    Location (x,y,z): [77.971886  19.522526  -1.8698243]
+    Dimensions (h,w,l): [1.491315 1.932928 4.275145]
+    Rotation: 3.1097 rad (178.2 deg)
+    2D BBox: [216.79655 210.2662  302.5137  266.41873]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 41
+
+  Object 46: Car
+    Location (x,y,z): [87.45578   12.06937   -1.8085998]
+    Dimensions (h,w,l): [1.447336 1.86522  4.253343]
+    Rotation: 3.0887 rad (177.0 deg)
+    2D BBox: [482.40433 192.60152 545.09955 236.79373]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 42
+
+  Object 47: Trafficcone
+    Location (x,y,z): [30.017109   8.891822  -1.6179509]
+    Dimensions (h,w,l): [0.799814 0.34796  0.339561]
+    Rotation: -1.5431 rad (-88.4 deg)
+    2D BBox: [ 61.741306 536.51733   86.431526 597.0949  ]
+    Truncated: 2.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 9
+
+  Object 48: Car
+    Location (x,y,z): [116.89204    -3.6773264  -1.6215158]
+    Dimensions (h,w,l): [1.680436 2.046875 4.393323]
+    Rotation: -0.0686 rad (-3.9 deg)
+    2D BBox: [876.3694  151.20454 914.0852  187.11621]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 1
+    Points in GT: 0
+
+  Object 49: Car
+    Location (x,y,z): [24.187418 -7.785341 -1.684025]
+    Dimensions (h,w,l): [1.482172 1.770169 4.711442]
+    Rotation: -0.0218 rad (-1.2 deg)
+    2D BBox: [1251.2311  594.6861 1479.6455  776.8199]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 371
+
+  Object 50: Motorcyclist
+    Location (x,y,z): [ 94.37243   -25.152786   -1.3901514]
+    Dimensions (h,w,l): [1.704712 0.715756 1.709803]
+    Rotation: 1.5300 rad (87.7 deg)
+    2D BBox: [1371.2035   181.07744 1419.7299   214.16231]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 11
+
+  Object 51: Motorcyclist
+    Location (x,y,z): [ 54.162296  -27.963135   -1.9183223]
+    Dimensions (h,w,l): [1.535073 0.834863 1.776775]
+    Rotation: 0.9385 rad (53.8 deg)
+    2D BBox: [1828.9064   296.9707  1908.618    365.97815]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 25
+
+  Object 52: Car
+    Location (x,y,z): [13.059402  -0.5446651 -1.6433407]
+    Dimensions (h,w,l): [1.697141 1.994799 4.209332]
+    Rotation: -0.0099 rad (-0.6 deg)
+    2D BBox: [ 390.1232   997.3864   760.15045 1080.     ]
+    Truncated: 0.0
+    Occluded: 3
+    Difficulty: -1
+    Points in GT: 172
+
+  Object 53: Van
+    Location (x,y,z): [115.43459    18.42612    -1.4951705]
+    Dimensions (h,w,l): [1.832386 1.889199 4.834665]
+    Rotation: -3.0694 rad (-175.9 deg)
+    2D BBox: [454.0432  149.01945 498.5824  188.41164]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 54: Trafficcone
+    Location (x,y,z): [24.092817   7.7295647 -1.6999524]
+    Dimensions (h,w,l): [0.806335 0.388658 0.365064]
+    Rotation: -1.6398 rad (-94.0 deg)
+    2D BBox: [  0.       647.2493    10.330495 735.5419  ]
+    Truncated: 0.0
+    Occluded: 3
+    Difficulty: -1
+    Points in GT: 19
+
+  Object 55: Car
+    Location (x,y,z): [50.677635  -1.6472771 -1.7166239]
+    Dimensions (h,w,l): [1.713776 1.831009 4.230382]
+    Rotation: 0.0034 rad (0.2 deg)
+    2D BBox: [800.3258  303.64563 887.903   389.06873]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 212
+
+  Object 56: Cyclist
+    Location (x,y,z): [54.027504   4.0471144 -1.943279 ]
+    Dimensions (h,w,l): [1.974673 0.73485  2.476964]
+    Rotation: 1.5814 rad (90.6 deg)
+    2D BBox: [570.6621  274.7     637.4368  344.22858]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 45
+
+  Object 57: Car
+    Location (x,y,z): [37.6122    -1.285062  -1.7165319]
+    Dimensions (h,w,l): [1.671182 1.823557 4.217493]
+    Rotation: -0.0211 rad (-1.2 deg)
+    2D BBox: [752.0207  397.62134 870.714   517.3905 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 193
+
+  Object 58: Car
+    Location (x,y,z): [198.48038    -9.889107   -2.3278372]
+    Dimensions (h,w,l): [1.451481 1.827858 4.246179]
+    Rotation: -0.0958 rad (-5.5 deg)
+    2D BBox: [947.81696 108.26513 970.6644  127.61581]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 59: Car
+    Location (x,y,z): [77.024025 12.267659 -1.723048]
+    Dimensions (h,w,l): [1.645385 1.846821 3.668618]
+    Rotation: 3.0889 rad (177.0 deg)
+    2D BBox: [424.22064 210.43068 494.59497 262.26944]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 79
+
+  Object 60: Motorcyclist
+    Location (x,y,z): [ 55.517227  -25.682577   -1.9456141]
+    Dimensions (h,w,l): [1.696402 0.821511 1.799267]
+    Rotation: 0.9779 rad (56.0 deg)
+    2D BBox: [1739.5139   292.60812 1809.2772   361.1971 ]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 31
+
+  Object 61: Trafficcone
+    Location (x,y,z): [26.711756   7.6941824 -1.7137483]
+    Dimensions (h,w,l): [0.801577 0.395177 0.353836]
+    Rotation: -1.5360 rad (-88.0 deg)
+    2D BBox: [ 70.11213 598.6025   93.93002 660.11633]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: 0
+    Points in GT: 9
+
+  Object 62: Car
+    Location (x,y,z): [ 84.411934  -18.813965   -1.8822589]
+    Dimensions (h,w,l): [1.405074 2.083942 4.205039]
+    Rotation: 0.0105 rad (0.6 deg)
+    2D BBox: [1267.2217   200.87982 1332.5338   243.84717]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 24
+
+  Object 63: Car
+    Location (x,y,z): [58.482105  16.274363  -1.8039021]
+    Dimensions (h,w,l): [1.732306 1.952003 4.422779]
+    Rotation: 3.1237 rad (179.0 deg)
+    2D BBox: [128.57635 256.6572  241.54565 334.5769 ]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 165
+
+  Object 64: Trafficcone
+    Location (x,y,z): [ 62.264454  -23.939768   -1.8010755]
+    Dimensions (h,w,l): [0.460644 0.373349 0.290506]
+    Rotation: -2.5382 rad (-145.4 deg)
+    2D BBox: [1588.2778   297.49414 1596.7605   310.98166]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 3
+
+  Object 65: Trafficcone
+    Location (x,y,z): [ 46.618782  -24.510159   -1.8961914]
+    Dimensions (h,w,l): [0.994328 0.380733 0.369686]
+    Rotation: -0.0772 rad (-4.4 deg)
+    2D BBox: [1879.2145   374.20004 1893.9585   415.0321 ]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 18
+
+  Object 66: Car
+    Location (x,y,z): [183.53957   -4.320222  -2.312788]
+    Dimensions (h,w,l): [1.456192 1.86611  4.323506]
+    Rotation: 0.0382 rad (2.2 deg)
+    2D BBox: [886.715   113.91347 915.08887 134.3427 ]
+    Truncated: 0.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0
+
+  Object 67: Car
+    Location (x,y,z): [79.22906   15.55839   -1.6843555]
+    Dimensions (h,w,l): [1.673473 1.946802 4.222219]
+    Rotation: 3.0982 rad (177.5 deg)
+    2D BBox: [337.95728 204.0464  412.2636  260.49396]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 55
+
+  Object 68: Car
+    Location (x,y,z): [107.83942    18.731869   -1.8139021]
+    Dimensions (h,w,l): [1.583403 1.827224 4.292703]
+    Rotation: -3.1291 rad (-179.3 deg)
+    2D BBox: [413.29007 162.58228 463.4271  203.96376]
+    Truncated: 1.0
+    Occluded: 0
+    Difficulty: -1
+    Points in GT: 0

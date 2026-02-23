@@ -8,7 +8,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(BASE))
 
 from pointpillars.utils import read_pickle, read_points, bbox_camera2lidar
-from pointpillars.dataset import point_range_filter, data_augment
+from .data_aug import point_range_filter, data_augment
 
 
 class BaseSampler():
@@ -139,6 +139,6 @@ class Kitti(Dataset):
 
 if __name__ == '__main__':
     
-    kitti_data = Kitti(data_root='/mnt/ssd1/lifa_rdata/det/kitti', 
+    kitti_data = Kitti(data_root='/data/zahra/kitti', 
                        split='train')
     kitti_data.__getitem__(9)

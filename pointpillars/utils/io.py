@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import pickle
+import json
 
 
 def read_pickle(file_path, suffix='.pkl'):
@@ -107,3 +108,61 @@ def write_label(result, file_path, suffix='.txt'):
             xyz = ' '.join(map(str, location[i]))
             line = f'{name[i]} {truncated[i]} {occluded[i]} {alpha[i]} {bbox_str} {hwl} {xyz} {rotation_y[i]} {score[i]}\n'
             f.writelines(line)
+
+def load_json_calib(cam_json_path, extr_json_path, extend_matrix=True):
+    with open(cam_json_path, "r") as f:
+        cam_calib = json.load(f)
+
+    with open(extr_json_path, "r") as f:
+        extr_calib = json.load(f)
+
+    P = np.array(cam_calib["P"]).reshape(3, 4)
+    R = np.array(cam_calib["R"]).reshape(3, 3) 
+    cam_D = np.array(cam_calib["cam_D"], dtype=np.float32)
+    cam_K = np.array(cam_calib["cam_K"], dtype=np.float32).reshape(3, 3)
+
+    rotation = np.array(extr_calib["rotation"], dtype=np.float32)        
+    translation = np.array(extr_calib["translation"], dtype=np.float32)
+    Tr_velo_to_cam = np.hstack([rotation, translation])
+    
+    if extend_matrix:
+        P = np.vstack([P, [0, 0, 0, 1]])
+
+        R0_rect_extend = np.eye(4)
+        R0_rect_extend[:3, :3] = R
+        R = R0_rect_extend
+
+        Tr_velo_to_cam = np.vstack([Tr_velo_to_cam, [0, 0, 0, 1]])
+        
+    calib_dict=dict(
+        cam_D=cam_D,
+        cam_K=cam_K,
+        R=R,
+        P=P,
+        Tr_velo_to_cam=Tr_velo_to_cam
+    )
+    return calib_dict              
+
+def read_json_label(file_path):
+    with open(file_path, "r") as f:
+        data = json.load(f)  # list of dicts
+
+    annotation = {}
+    annotation['name'] = np.array([obj["type"] for obj in data])
+    annotation['truncated'] = np.array([int(obj["truncated_state"]) for obj in data], dtype=np.int32)
+    annotation['occluded'] = np.array([int(obj["occluded_state"]) for obj in data], dtype=np.int32)
+    annotation['alpha'] = np.array([float(obj["alpha"]) for obj in data], dtype=np.float32)
+    annotation['bbox'] = np.array([[float(obj["2d_box"]["xmin"]), float(obj["2d_box"]["ymin"]),
+                                    float(obj["2d_box"]["xmax"]), float(obj["2d_box"]["ymax"])]
+                                   for obj in data], dtype=np.float32)
+    annotation['dimensions'] = np.array([[float(obj["3d_dimensions"]["h"]),
+                                          float(obj["3d_dimensions"]["w"]),
+                                          float(obj["3d_dimensions"]["l"])]
+                                         for obj in data], dtype=np.float32)
+    annotation['location'] = np.array([[float(obj["3d_location"]["x"]),
+                                        float(obj["3d_location"]["y"]),
+                                        float(obj["3d_location"]["z"])]
+                                       for obj in data], dtype=np.float32)
+    annotation['rotation_y'] = np.array([float(obj["rotation"]) for obj in data], dtype=np.float32)
+
+    return annotation
