@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import torch
+import cv2
 from torch.utils.data import Dataset
 
 import sys
@@ -8,7 +9,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(BASE))
 
 from pointpillars.utils import read_pickle, read_points, bbox_camera2lidar
-from pointpillars.dataset import point_range_filter, data_augment
+from pointpillars.dataset import point_range_filter, data_augment, data_augment_image_aligned, data_augment_none
 
 
 class BaseSampler():
@@ -41,11 +42,19 @@ class Kitti(Dataset):
         'Car': 2
         }
 
-    def __init__(self, data_root, split, pts_prefix='velodyne_reduced'):
+    def __init__(self, data_root, split, pts_prefix='velodyne_reduced',
+                 multimodal=False, image_size=(384, 1280),
+                 multimodal_aug='image_aligned'):
         assert split in ['train', 'val', 'trainval', 'test']
+        assert multimodal_aug in ['image_aligned', 'full_lidar', 'none']
         self.data_root = data_root
         self.split = split
         self.pts_prefix = pts_prefix
+        self.multimodal = multimodal
+        self.image_size = image_size
+        self.multimodal_aug = multimodal_aug
+        self.image_mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        self.image_std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
         self.data_infos = read_pickle(os.path.join(data_root, f'kitti_infos_{split}.pkl'))
         self.sorted_ids = list(self.data_infos.keys())
         db_infos = read_pickle(os.path.join(data_root, 'kitti_dbinfos_train.pkl'))
@@ -93,6 +102,24 @@ class Kitti(Dataset):
         
         return db_infos
 
+    def load_image(self, image_info):
+        img_path = os.path.join(self.data_root, image_info['image_path'])
+        image = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        if image is None:
+            raise FileNotFoundError(f'Could not read KITTI image: {img_path}')
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        resized_h, resized_w = self.image_size
+        image = cv2.resize(image, (resized_w, resized_h), interpolation=cv2.INTER_LINEAR)
+        image = image.astype(np.float32) / 255.0
+        image = (image - self.image_mean) / self.image_std
+        return image.transpose(2, 0, 1).astype(np.float32)
+
+    def append_image_projection_fields(self, pts):
+        image_xyz = pts[:, :3].copy()
+        image_valid = np.ones((pts.shape[0], 1), dtype=pts.dtype)
+        return np.concatenate([pts, image_xyz, image_valid], axis=1)
+
     def __getitem__(self, index):
         data_info = self.data_infos[self.sorted_ids[index]]
         image_info, calib_info, annos_info = \
@@ -123,11 +150,21 @@ class Kitti(Dataset):
             'gt_labels': np.array(gt_labels), 
             'gt_names': annos_name,
             'difficulty': annos_info['difficulty'],
-            'image_info': image_info,
+            'image_info': dict(image_info),
             'calib_info': calib_info
         }
+        data_dict['image_info']['resized_shape'] = self.image_size
+        if self.multimodal:
+            data_dict['image'] = self.load_image(data_dict['image_info'])
+            data_dict['pts'] = self.append_image_projection_fields(data_dict['pts'])
+
         if self.split in ['train', 'trainval']:
-            data_dict = data_augment(self.CLASSES, self.data_root, data_dict, self.data_aug_config)
+            if self.multimodal_aug == 'none':
+                data_dict = data_augment_none(data_dict, self.data_aug_config)
+            elif self.multimodal and self.multimodal_aug == 'image_aligned':
+                data_dict = data_augment_image_aligned(data_dict, self.data_aug_config)
+            else:
+                data_dict = data_augment(self.CLASSES, self.data_root, data_dict, self.data_aug_config)
         else:
             data_dict = point_range_filter(data_dict, point_range=self.data_aug_config['point_range_filter'])
 

@@ -1,10 +1,23 @@
 import copy
-import numba
 import numpy as np
 import os
 import pdb
 from pointpillars.utils import bbox3d2bevcorners, box_collision_test, read_points, \
     remove_pts_in_bboxes, limit_period
+
+if os.environ.get('POINTPILLARS_USE_NUMBA') == '1':
+    import numba
+else:
+    numba = None
+
+
+def pad_points_dim(points, dim):
+    if points.shape[1] == dim:
+        return points
+
+    padded_points = np.zeros((points.shape[0], dim), dtype=points.dtype)
+    padded_points[:, :points.shape[1]] = points
+    return padded_points
 
 
 def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
@@ -20,6 +33,7 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
     gt_difficulty = data_dict['difficulty']
     image_info, calib_info = data_dict['image_info'], data_dict['calib_info']
 
+    point_dim = pts.shape[1]
     sampled_pts, sampled_names, sampled_labels = [], [], []
     sampled_bboxes, sampled_difficulty = [], []
 
@@ -49,6 +63,7 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
                 pt_path = os.path.join(data_root, cur_sample['path'])
                 sampled_pts_cur = read_points(pt_path)
                 sampled_pts_cur[:, :3] += cur_sample['box3d_lidar'][:3]
+                sampled_pts_cur = pad_points_dim(sampled_pts_cur, point_dim)
                 sampled_pts.append(sampled_pts_cur)
                 sampled_names.append(cur_sample['name'])
                 sampled_labels.append(CLASSES[cur_sample['name']])
@@ -63,14 +78,15 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
         
     # merge sampled database
     # remove raw points in sampled_bboxes firstly
-    pts = remove_pts_in_bboxes(pts, np.stack(sampled_bboxes, axis=0))
-    # pts = np.concatenate([pts, np.concatenate(sampled_pts, axis=0)], axis=0)
-    pts = np.concatenate([np.concatenate(sampled_pts, axis=0), pts], axis=0)
+    if len(sampled_bboxes) > 0:
+        pts = remove_pts_in_bboxes(pts, np.stack(sampled_bboxes, axis=0))
+        # pts = np.concatenate([pts, np.concatenate(sampled_pts, axis=0)], axis=0)
+        pts = np.concatenate([np.concatenate(sampled_pts, axis=0), pts], axis=0)
     gt_bboxes_3d = avoid_coll_boxes.astype(np.float32)
-    gt_labels = np.concatenate([gt_labels, np.array(sampled_labels)], axis=0)
-    gt_names = np.concatenate([gt_names, np.array(sampled_names)], axis=0)
-    difficulty = np.concatenate([gt_difficulty, np.array(sampled_difficulty)], axis=0)
-    data_dict = {
+    gt_labels = np.concatenate([gt_labels, np.array(sampled_labels, dtype=gt_labels.dtype)], axis=0)
+    gt_names = np.concatenate([gt_names, np.array(sampled_names, dtype=gt_names.dtype)], axis=0)
+    difficulty = np.concatenate([gt_difficulty, np.array(sampled_difficulty, dtype=gt_difficulty.dtype)], axis=0)
+    data_dict.update({
             'pts': pts,
             'gt_bboxes_3d': gt_bboxes_3d,
             'gt_labels': gt_labels, 
@@ -78,11 +94,10 @@ def dbsample(CLASSES, data_root, data_dict, db_sampler, sample_groups):
             'difficulty': difficulty,
             'image_info': image_info,
             'calib_info': calib_info
-        }
+        })
     return data_dict
 
 
-@numba.jit(nopython=True)
 def object_noise_core(pts, gt_bboxes_3d, bev_corners, trans_vec, rot_angle, rot_mat, masks):
     '''
     pts: (N, 4)
@@ -143,6 +158,10 @@ def object_noise_core(pts, gt_bboxes_3d, bev_corners, trans_vec, rot_angle, rot_
     return gt_bboxes_3d, pts
 
 
+if numba is not None:
+    object_noise_core = numba.jit(nopython=True)(object_noise_core)
+
+
 def object_noise(data_dict, num_try, translation_std, rot_range):
     '''
     data_dict: dict(pts, gt_bboxes_3d, gt_labels, gt_names, difficulty)
@@ -152,6 +171,7 @@ def object_noise(data_dict, num_try, translation_std, rot_range):
     return: data_dict
     '''
     pts, gt_bboxes_3d = data_dict['pts'], data_dict['gt_bboxes_3d']
+    lidar_pts = pts[:, :4].copy() if pts.shape[1] > 4 else pts
     n_bbox = len(gt_bboxes_3d)
     
     # 1. generate rotation vectors and rotation matrices
@@ -166,13 +186,17 @@ def object_noise(data_dict, num_try, translation_std, rot_range):
     # 2. generate noise for each bbox and the points inside the bbox.
     bev_corners = bbox3d2bevcorners(gt_bboxes_3d) # (n_bbox, 4, 2) # for collision test
     masks = remove_pts_in_bboxes(pts, gt_bboxes_3d, rm=False) # identify which point should be added noise
-    gt_bboxes_3d, pts = object_noise_core(pts=pts, 
+    gt_bboxes_3d, lidar_pts = object_noise_core(pts=lidar_pts,
                                           gt_bboxes_3d=gt_bboxes_3d, 
                                           bev_corners=bev_corners, 
                                           trans_vec=trans_vec, 
                                           rot_angle=rot_angle, 
                                           rot_mat=rot_mat, 
                                           masks=masks)
+    if pts.shape[1] > 4:
+        pts[:, :4] = lidar_pts
+    else:
+        pts = lidar_pts
     data_dict.update({'gt_bboxes_3d': gt_bboxes_3d})
     data_dict.update({'pts': pts})
 
@@ -354,4 +378,39 @@ def data_augment(CLASSES, data_root, data_dict, data_aug_config):
     # # 8. filter bboxes with label=-1
     # data_dict = filter_bboxes_with_labels(data_dict)
     
+    return data_dict
+
+
+def data_augment_image_aligned(data_dict, data_aug_config):
+    '''
+    Multimodal-safe augmentation path.
+
+    This keeps the LiDAR points, labels, camera image, and calibration in the
+    same coordinate frame. Geometry-changing LiDAR augmentations need matching
+    image/calibration transforms; without them, sampled image features no
+    longer describe the transformed point locations.
+    '''
+
+    point_range = data_aug_config['point_range_filter']
+    data_dict = point_range_filter(data_dict, point_range)
+
+    object_range = data_aug_config['object_range_filter']
+    data_dict = object_range_filter(data_dict, object_range)
+
+    data_dict = points_shuffle(data_dict)
+    return data_dict
+
+
+def data_augment_none(data_dict, data_aug_config):
+    '''
+    No train-time augmentation. Keep only deterministic range filtering so the
+    sample stays within the configured PointPillars detection area.
+    '''
+
+    point_range = data_aug_config['point_range_filter']
+    data_dict = point_range_filter(data_dict, point_range)
+
+    object_range = data_aug_config['object_range_filter']
+    data_dict = object_range_filter(data_dict, object_range)
+
     return data_dict

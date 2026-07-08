@@ -6,7 +6,7 @@ import pdb
 
 from pointpillars.utils import setup_seed
 from pointpillars.dataset import Kitti, get_dataloader
-from pointpillars.model import PointPillars
+from pointpillars.model import PointPillars, MultimodalPointPillars
 from pointpillars.loss import Loss
 from torch.utils.tensorboard import SummaryWriter
 
@@ -17,14 +17,128 @@ def save_summary(writer, loss_dict, global_step, tag, lr=None, momentum=None):
         writer.add_scalar('lr', lr, global_step)
     if momentum is not None:
         writer.add_scalar('momentum', momentum, global_step)
+    writer.flush()
+
+
+def format_loss_log(loss_dict):
+    loss_items = []
+    for k, v in loss_dict.items():
+        if torch.is_tensor(v):
+            v = v.detach().cpu().item()
+        loss_items.append(f'{k}: {v:.4f}')
+    return ', '.join(loss_items)
+
+
+def loss_value(value):
+    if torch.is_tensor(value):
+        return value.detach().cpu().item()
+    return float(value)
+
+
+def move_data_to_cuda(data_dict):
+    for key, value in data_dict.items():
+        if torch.is_tensor(value):
+            data_dict[key] = value.cuda()
+        elif isinstance(value, list):
+            for j, item in enumerate(value):
+                if torch.is_tensor(item):
+                    value[j] = item.cuda()
+
+
+def atomic_torch_save(obj, path):
+    tmp_path = path + '.tmp'
+    torch.save(obj, tmp_path)
+    os.replace(tmp_path, path)
+
+
+def save_training_state(path, model, optimizer, scheduler, completed_epoch,
+                        args, extra_state=None):
+    checkpoint = {
+        'epoch': completed_epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+        'args': vars(args),
+    }
+    if extra_state is not None:
+        checkpoint.update(extra_state)
+    atomic_torch_save(checkpoint, path)
+
+
+def load_model_weights(model, state_dict, strict=True):
+    incompatible = model.load_state_dict(state_dict, strict=strict)
+    if not strict:
+        missing = getattr(incompatible, 'missing_keys', [])
+        unexpected = getattr(incompatible, 'unexpected_keys', [])
+        if missing:
+            print(f'Ignored missing checkpoint keys: {len(missing)}')
+        if unexpected:
+            print(f'Ignored unexpected checkpoint keys: {len(unexpected)}')
+
+
+def load_training_checkpoint(args, model, optimizer, scheduler, saved_ckpt_path):
+    resume_path = args.resume_from
+    if args.auto_resume and resume_path is None:
+        latest_path = os.path.join(saved_ckpt_path, 'latest_train_state.pth')
+        if os.path.isfile(latest_path):
+            resume_path = latest_path
+
+    if resume_path is None:
+        if args.start_epoch != 0:
+            raise ValueError('--start_epoch requires --resume_from or --auto_resume')
+        return 0, None
+
+    if not os.path.isfile(resume_path):
+        raise FileNotFoundError(f'Resume checkpoint not found: {resume_path}')
+
+    device = torch.device('cpu' if args.no_cuda else 'cuda')
+    checkpoint = torch.load(resume_path, map_location=device)
+
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        strict = not (args.multimodal and args.resume_weights_only)
+        load_model_weights(model, checkpoint['model_state_dict'], strict=strict)
+        if not args.resume_weights_only:
+            if 'optimizer_state_dict' in checkpoint:
+                optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            if 'scheduler_state_dict' in checkpoint:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint.get('epoch', 0)
+        else:
+            start_epoch = args.start_epoch
+    else:
+        strict = not (args.multimodal and args.resume_weights_only)
+        load_model_weights(model, checkpoint, strict=strict)
+        start_epoch = args.start_epoch
+        if start_epoch == 0:
+            print(
+                'Loaded a weights-only checkpoint. Pass --start_epoch if this '
+                'checkpoint was saved after an earlier training epoch.'
+            )
+
+    if args.start_epoch != 0:
+        start_epoch = args.start_epoch
+
+    print(f'Resumed training from {resume_path}; starting at epoch {start_epoch + 1}.')
+    if isinstance(checkpoint, dict):
+        return start_epoch, checkpoint
+    return start_epoch, None
 
 
 def main(args):
+    if args.early_stop_patience < 0:
+        raise ValueError('--early_stop_patience must be >= 0')
+    if args.early_stop_min_delta < 0:
+        raise ValueError('--early_stop_min_delta must be >= 0')
+
     setup_seed()
     train_dataset = Kitti(data_root=args.data_root,
-                          split='train')
+                          split='train',
+                          multimodal=args.multimodal,
+                          multimodal_aug=args.multimodal_aug)
     val_dataset = Kitti(data_root=args.data_root,
-                        split='val')
+                        split='val',
+                        multimodal=args.multimodal,
+                        multimodal_aug=args.multimodal_aug)
     train_dataloader = get_dataloader(dataset=train_dataset, 
                                       batch_size=args.batch_size, 
                                       num_workers=args.num_workers,
@@ -34,10 +148,11 @@ def main(args):
                                     num_workers=args.num_workers,
                                     shuffle=False)
 
+    model_cls = MultimodalPointPillars if args.multimodal else PointPillars
     if not args.no_cuda:
-        pointpillars = PointPillars(nclasses=args.nclasses).cuda()
+        pointpillars = model_cls(nclasses=args.nclasses).cuda()
     else:
-        pointpillars = PointPillars(nclasses=args.nclasses)
+        pointpillars = model_cls(nclasses=args.nclasses)
     loss_func = Loss()
 
     max_iters = len(train_dataloader) * args.max_epoch
@@ -61,16 +176,30 @@ def main(args):
     saved_ckpt_path = os.path.join(args.saved_path, 'checkpoints')
     os.makedirs(saved_ckpt_path, exist_ok=True)
 
-    for epoch in range(args.max_epoch):
+    start_epoch, resume_checkpoint = load_training_checkpoint(
+        args, pointpillars, optimizer, scheduler, saved_ckpt_path
+    )
+    if start_epoch >= args.max_epoch:
+        print(
+            f'Start epoch {start_epoch} is already >= max_epoch '
+            f'{args.max_epoch}; nothing to train.'
+        )
+        return
+
+    best_val_loss = None
+    best_epoch = 0
+    early_stop_counter = 0
+    if resume_checkpoint is not None:
+        best_val_loss = resume_checkpoint.get('best_val_loss')
+        best_epoch = resume_checkpoint.get('best_epoch', 0)
+        early_stop_counter = resume_checkpoint.get('early_stop_counter', 0)
+
+    for epoch in range(start_epoch, args.max_epoch):
         print('=' * 20, epoch, '=' * 20)
         train_step, val_step = 0, 0
         for i, data_dict in enumerate(tqdm(train_dataloader)):
             if not args.no_cuda:
-                # move the tensors to the cuda
-                for key in data_dict:
-                    for j, item in enumerate(data_dict[key]):
-                        if torch.is_tensor(item):
-                            data_dict[key][j] = data_dict[key][j].cuda()
+                move_data_to_cuda(data_dict)
             
             optimizer.zero_grad()
 
@@ -78,11 +207,19 @@ def main(args):
             batched_gt_bboxes = data_dict['batched_gt_bboxes']
             batched_labels = data_dict['batched_labels']
             batched_difficulty = data_dict['batched_difficulty']
-            bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict = \
-                pointpillars(batched_pts=batched_pts, 
-                             mode='train',
-                             batched_gt_bboxes=batched_gt_bboxes, 
-                             batched_gt_labels=batched_labels)
+            model_kwargs = dict(
+                batched_pts=batched_pts,
+                mode='train',
+                batched_gt_bboxes=batched_gt_bboxes,
+                batched_gt_labels=batched_labels,
+            )
+            if args.multimodal:
+                model_kwargs.update(
+                    batched_imgs=data_dict['batched_imgs'],
+                    batched_img_info=data_dict['batched_img_info'],
+                    batched_calib_info=data_dict['batched_calib_info'],
+                )
+            bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict = pointpillars(**model_kwargs)
             
             bbox_cls_pred = bbox_cls_pred.permute(0, 2, 3, 1).reshape(-1, args.nclasses)
             bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 7)
@@ -129,31 +266,60 @@ def main(args):
                 save_summary(writer, loss_dict, global_step, 'train',
                              lr=optimizer.param_groups[0]['lr'], 
                              momentum=optimizer.param_groups[0]['betas'][0])
+                tqdm.write(
+                    f'[train] epoch: {epoch + 1}/{args.max_epoch}, '
+                    f'step: {global_step}, {format_loss_log(loss_dict)}'
+                )
             train_step += 1
-        if (epoch + 1) % args.ckpt_freq_epoch == 0:
-            torch.save(pointpillars.state_dict(), os.path.join(saved_ckpt_path, f'epoch_{epoch+1}.pth'))
+
+        completed_epoch = epoch + 1
+        latest_state_path = os.path.join(saved_ckpt_path, 'latest_train_state.pth')
+        extra_state = {
+            'best_val_loss': best_val_loss,
+            'best_epoch': best_epoch,
+            'early_stop_counter': early_stop_counter,
+        }
+        save_training_state(latest_state_path, pointpillars, optimizer,
+                            scheduler, completed_epoch, args,
+                            extra_state=extra_state)
+        if completed_epoch % args.ckpt_freq_epoch == 0 or completed_epoch == args.max_epoch:
+            atomic_torch_save(
+                pointpillars.state_dict(),
+                os.path.join(saved_ckpt_path, f'epoch_{completed_epoch}.pth')
+            )
+            save_training_state(
+                os.path.join(saved_ckpt_path, f'epoch_{completed_epoch}_train_state.pth'),
+                pointpillars, optimizer, scheduler, completed_epoch, args,
+                extra_state=extra_state
+            )
 
         if epoch % 2 == 0:
             continue
         pointpillars.eval()
+        val_loss_sum = 0.0
+        val_loss_count = 0
         with torch.no_grad():
             for i, data_dict in enumerate(tqdm(val_dataloader)):
                 if not args.no_cuda:
-                    # move the tensors to the cuda
-                    for key in data_dict:
-                        for j, item in enumerate(data_dict[key]):
-                            if torch.is_tensor(item):
-                                data_dict[key][j] = data_dict[key][j].cuda()
+                    move_data_to_cuda(data_dict)
                 
                 batched_pts = data_dict['batched_pts']
                 batched_gt_bboxes = data_dict['batched_gt_bboxes']
                 batched_labels = data_dict['batched_labels']
                 batched_difficulty = data_dict['batched_difficulty']
-                bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict = \
-                    pointpillars(batched_pts=batched_pts, 
-                                mode='train',
-                                batched_gt_bboxes=batched_gt_bboxes, 
-                                batched_gt_labels=batched_labels)
+                model_kwargs = dict(
+                    batched_pts=batched_pts,
+                    mode='train',
+                    batched_gt_bboxes=batched_gt_bboxes,
+                    batched_gt_labels=batched_labels,
+                )
+                if args.multimodal:
+                    model_kwargs.update(
+                        batched_imgs=data_dict['batched_imgs'],
+                        batched_img_info=data_dict['batched_img_info'],
+                        batched_calib_info=data_dict['batched_calib_info'],
+                    )
+                bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict = pointpillars(**model_kwargs)
                 
                 bbox_cls_pred = bbox_cls_pred.permute(0, 2, 3, 1).reshape(-1, args.nclasses)
                 bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 7)
@@ -187,12 +353,76 @@ def main(args):
                                     num_cls_pos=num_cls_pos, 
                                     batched_bbox_reg=batched_bbox_reg, 
                                     batched_dir_labels=batched_dir_labels)
+                val_loss_sum += loss_value(loss_dict['total_loss'])
+                val_loss_count += 1
                 
                 global_step = epoch * len(val_dataloader) + val_step + 1
                 if global_step % args.log_freq == 0:
                     save_summary(writer, loss_dict, global_step, 'val')
+                    tqdm.write(
+                        f'[val] epoch: {epoch + 1}/{args.max_epoch}, '
+                        f'step: {global_step}, {format_loss_log(loss_dict)}'
+                    )
                 val_step += 1
         pointpillars.train()
+
+        if val_loss_count == 0:
+            continue
+
+        mean_val_loss = val_loss_sum / val_loss_count
+        writer.add_scalar('val/epoch_total_loss', mean_val_loss, completed_epoch)
+        writer.flush()
+        if args.early_stop_patience <= 0:
+            continue
+
+        improved = (
+            best_val_loss is None or
+            mean_val_loss < best_val_loss - args.early_stop_min_delta
+        )
+        if improved:
+            best_val_loss = mean_val_loss
+            best_epoch = completed_epoch
+            early_stop_counter = 0
+            extra_state = {
+                'best_val_loss': best_val_loss,
+                'best_epoch': best_epoch,
+                'early_stop_counter': early_stop_counter,
+            }
+            atomic_torch_save(
+                pointpillars.state_dict(),
+                os.path.join(saved_ckpt_path, 'best.pth')
+            )
+            save_training_state(
+                os.path.join(saved_ckpt_path, 'best_train_state.pth'),
+                pointpillars, optimizer, scheduler, completed_epoch, args,
+                extra_state=extra_state
+            )
+            tqdm.write(
+                f'[early-stop] best val total_loss improved to '
+                f'{best_val_loss:.4f} at epoch {best_epoch}'
+            )
+        else:
+            early_stop_counter += 1
+            tqdm.write(
+                f'[early-stop] val total_loss {mean_val_loss:.4f} did not '
+                f'improve from {best_val_loss:.4f}; '
+                f'{early_stop_counter}/{args.early_stop_patience}'
+            )
+
+        extra_state = {
+            'best_val_loss': best_val_loss,
+            'best_epoch': best_epoch,
+            'early_stop_counter': early_stop_counter,
+        }
+        save_training_state(latest_state_path, pointpillars, optimizer,
+                            scheduler, completed_epoch, args,
+                            extra_state=extra_state)
+        if early_stop_counter >= args.early_stop_patience:
+            print(
+                f'Early stopping at epoch {completed_epoch}. '
+                f'Best val total_loss {best_val_loss:.4f} was at epoch {best_epoch}.'
+            )
+            return
 
 
 if __name__ == '__main__':
@@ -207,6 +437,24 @@ if __name__ == '__main__':
     parser.add_argument('--max_epoch', type=int, default=160)
     parser.add_argument('--log_freq', type=int, default=8)
     parser.add_argument('--ckpt_freq_epoch', type=int, default=20)
+    parser.add_argument('--early_stop_patience', type=int, default=0,
+                        help='validation checks without val total_loss improvement before stopping; 0 disables')
+    parser.add_argument('--early_stop_min_delta', type=float, default=0.0,
+                        help='minimum val total_loss improvement required to reset early stopping')
+    parser.add_argument('--resume_from', default=None,
+                        help='path to a checkpoint to resume from')
+    parser.add_argument('--start_epoch', type=int, default=0,
+                        help='completed epoch for weights-only checkpoints')
+    parser.add_argument('--auto_resume', action='store_true',
+                        help='resume from saved_path/checkpoints/latest_train_state.pth if it exists')
+    parser.add_argument('--resume_weights_only', action='store_true',
+                        help='load only model weights, ignoring optimizer and scheduler state')
+    parser.add_argument('--multimodal', action='store_true',
+                        help='enable image-lidar early fusion model')
+    parser.add_argument('--multimodal_aug',
+                        choices=['image_aligned', 'full_lidar', 'none'],
+                        default='image_aligned',
+                        help='training augmentation policy')
     parser.add_argument('--no_cuda', action='store_true',
                         help='whether to use cuda')
     args = parser.parse_args()

@@ -1,10 +1,15 @@
 import copy
-import numba
 import numpy as np
+import os
 import random
 import torch
 import pdb
 from pointpillars.ops.iou3d_module import boxes_overlap_bev, boxes_iou_bev
+
+if os.environ.get('POINTPILLARS_USE_NUMBA') == '1':
+    import numba
+else:
+    numba = None
 
 
 def setup_seed(seed=0, deterministic = True):
@@ -215,7 +220,6 @@ def group_rectangle_vertexs(bboxes_corners):
     return group_rectangle_vertexs
 
 
-@numba.jit(nopython=True)
 def bevcorner2alignedbbox(bev_corners):
     '''
     bev_corners: shape=(N, 4, 2)
@@ -238,7 +242,6 @@ def bevcorner2alignedbbox(bev_corners):
 
 
 # modified from https://github.com/open-mmlab/mmdetection3d/blob/master/mmdet3d/datasets/pipelines/data_augment_utils.py#L31
-@numba.jit(nopython=True)
 def box_collision_test(boxes, qboxes, clockwise=True):
     """Box collision test.
     Args:
@@ -348,7 +351,6 @@ def group_plane_equation(bbox_group_rectangle_vertexs):
     return plane_equation_params
 
 
-@numba.jit(nopython=True)
 def points_in_bboxes(points, plane_equation_params):
     '''
     points: shape=(N, 3)
@@ -368,6 +370,12 @@ def points_in_bboxes(points, plane_equation_params):
                     masks[i][j] = False
                     break
     return masks
+
+
+if numba is not None:
+    bevcorner2alignedbbox = numba.jit(nopython=True)(bevcorner2alignedbbox)
+    box_collision_test = numba.jit(nopython=True)(box_collision_test)
+    points_in_bboxes = numba.jit(nopython=True)(points_in_bboxes)
 
 
 def remove_pts_in_bboxes(points, bboxes, rm=True):

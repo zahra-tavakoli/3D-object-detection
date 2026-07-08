@@ -9,7 +9,7 @@ from pointpillars.utils import setup_seed, keep_bbox_from_image_range, \
     keep_bbox_from_lidar_range, write_pickle, write_label, \
     iou2d, iou3d_camera, iou_bev
 from pointpillars.dataset import Kitti, get_dataloader
-from pointpillars.model import PointPillars
+from pointpillars.model import PointPillars, MultimodalPointPillars
 
 
 def get_score_thresholds(tp_scores, total_num_valid_gt, num_sample_pts=41):
@@ -33,6 +33,30 @@ def get_score_thresholds(tp_scores, total_num_valid_gt, num_sample_pts=41):
     return score_thresholds
 
 
+def move_data_to_cuda(data_dict):
+    for key, value in data_dict.items():
+        if torch.is_tensor(value):
+            data_dict[key] = value.cuda()
+        elif isinstance(value, list):
+            for j, item in enumerate(value):
+                if torch.is_tensor(item):
+                    value[j] = item.cuda()
+
+
+def format_result_to_arrays(format_result):
+    return {
+        'name': np.array(format_result['name']),
+        'truncated': np.array(format_result['truncated'], dtype=np.float32),
+        'occluded': np.array(format_result['occluded'], dtype=np.int32),
+        'alpha': np.array(format_result['alpha'], dtype=np.float32),
+        'bbox': np.array(format_result['bbox'], dtype=np.float32).reshape(-1, 4),
+        'dimensions': np.array(format_result['dimensions'], dtype=np.float32).reshape(-1, 3),
+        'location': np.array(format_result['location'], dtype=np.float32).reshape(-1, 3),
+        'rotation_y': np.array(format_result['rotation_y'], dtype=np.float32),
+        'score': np.array(format_result['score'], dtype=np.float32)
+    }
+
+
 def do_eval(det_results, gt_results, CLASSES, saved_path):
     '''
     det_results: list,
@@ -40,6 +64,10 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
     CLASSES: dict
     '''
     assert len(det_results) == len(gt_results)
+    det_results = {
+        id: format_result_to_arrays(result)
+        for id, result in det_results.items()
+    }
     f = open(os.path.join(saved_path, 'eval_results.txt'), 'w')
 
     # 1. calculate iou
@@ -278,7 +306,8 @@ def do_eval(det_results, gt_results, CLASSES, saved_path):
 
 def main(args):
     val_dataset = Kitti(data_root=args.data_root,
-                        split='val')
+                        split='val',
+                        multimodal=args.multimodal)
     val_dataloader = get_dataloader(dataset=val_dataset, 
                                     batch_size=args.batch_size, 
                                     num_workers=args.num_workers,
@@ -286,13 +315,15 @@ def main(args):
     CLASSES = Kitti.CLASSES
     LABEL2CLASSES = {v:k for k, v in CLASSES.items()}
 
+    model_cls = MultimodalPointPillars if args.multimodal else PointPillars
     if not args.no_cuda:
-        model = PointPillars(nclasses=args.nclasses).cuda()
-        model.load_state_dict(torch.load(args.ckpt))
+        model = model_cls(nclasses=args.nclasses).cuda()
+        model.load_state_dict(torch.load(args.ckpt), strict=not args.multimodal)
     else:
-        model = PointPillars(nclasses=args.nclasses)
+        model = model_cls(nclasses=args.nclasses)
         model.load_state_dict(
-            torch.load(args.ckpt, map_location=torch.device('cpu')))
+            torch.load(args.ckpt, map_location=torch.device('cpu')),
+            strict=not args.multimodal)
     
     saved_path = args.saved_path
     os.makedirs(saved_path, exist_ok=True)
@@ -307,22 +338,48 @@ def main(args):
         print('Predicting and Formatting the results.')
         for i, data_dict in enumerate(tqdm(val_dataloader)):
             if not args.no_cuda:
-                # move the tensors to the cuda
-                for key in data_dict:
-                    for j, item in enumerate(data_dict[key]):
-                        if torch.is_tensor(item):
-                            data_dict[key][j] = data_dict[key][j].cuda()
+                move_data_to_cuda(data_dict)
             
             batched_pts = data_dict['batched_pts']
             batched_gt_bboxes = data_dict['batched_gt_bboxes']
             batched_labels = data_dict['batched_labels']
             batched_difficulty = data_dict['batched_difficulty']
-            batch_results = model(batched_pts=batched_pts, 
-                                  mode='val',
-                                  batched_gt_bboxes=batched_gt_bboxes, 
-                                  batched_gt_labels=batched_labels)
+            model_kwargs = dict(
+                batched_pts=batched_pts,
+                mode='val',
+                batched_gt_bboxes=batched_gt_bboxes,
+                batched_gt_labels=batched_labels,
+            )
+            if args.multimodal:
+                model_kwargs.update(
+                    batched_imgs=data_dict['batched_imgs'],
+                    batched_img_info=data_dict['batched_img_info'],
+                    batched_calib_info=data_dict['batched_calib_info'],
+                )
+            batch_results = model(**model_kwargs)
             # pdb.set_trace()
             for j, result in enumerate(batch_results):
+                # normal case: result is already a dict
+                if isinstance(result, dict):
+                    pass
+
+                # abnormal empty-output case: result is something like ([], [], [])
+                elif isinstance(result, tuple):
+                    is_all_empty_lists = all(isinstance(x, list) and len(x) == 0 for x in result)
+                    if is_all_empty_lists:
+                        result = {
+                            'lidar_bboxes': np.zeros((0, 7), dtype=np.float32),
+                            'labels': np.zeros((0,), dtype=np.int64),
+                            'scores': np.zeros((0,), dtype=np.float32),
+                        }
+                    else:
+                        print("Unexpected tuple result:", type(result), result)
+                        continue
+
+                else:
+                    print("Unexpected result type:", type(result))
+                    continue
+
                 format_result = {
                     'name': [],
                     'truncated': [],
@@ -362,7 +419,7 @@ def main(args):
                 
                 write_label(format_result, os.path.join(saved_submit_path, f'{idx:06d}.txt'))
 
-                format_results[idx] = {k:np.array(v) for k, v in format_result.items()}
+                format_results[idx] = format_result_to_arrays(format_result)
         
         write_pickle(format_results, os.path.join(saved_path, 'results.pkl'))
     
@@ -379,6 +436,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--nclasses', type=int, default=3)
+    parser.add_argument('--multimodal', action='store_true',
+                        help='enable image-lidar early fusion model')
     parser.add_argument('--no_cuda', action='store_true',
                         help='whether to use cuda')
     args = parser.parse_args()
