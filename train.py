@@ -65,6 +65,19 @@ def save_training_state(path, model, optimizer, scheduler, completed_epoch,
     atomic_torch_save(checkpoint, path)
 
 
+def save_epoch_checkpoint(saved_ckpt_path, model, optimizer, scheduler,
+                          completed_epoch, args, extra_state):
+    atomic_torch_save(
+        model.state_dict(),
+        os.path.join(saved_ckpt_path, f'epoch_{completed_epoch}.pth')
+    )
+    save_training_state(
+        os.path.join(saved_ckpt_path, f'epoch_{completed_epoch}_train_state.pth'),
+        model, optimizer, scheduler, completed_epoch, args,
+        extra_state=extra_state
+    )
+
+
 def load_model_weights(model, state_dict, strict=True):
     incompatible = model.load_state_dict(state_dict, strict=strict)
     if not strict:
@@ -283,15 +296,9 @@ def main(args):
                             scheduler, completed_epoch, args,
                             extra_state=extra_state)
         if completed_epoch % args.ckpt_freq_epoch == 0 or completed_epoch == args.max_epoch:
-            atomic_torch_save(
-                pointpillars.state_dict(),
-                os.path.join(saved_ckpt_path, f'epoch_{completed_epoch}.pth')
-            )
-            save_training_state(
-                os.path.join(saved_ckpt_path, f'epoch_{completed_epoch}_train_state.pth'),
-                pointpillars, optimizer, scheduler, completed_epoch, args,
-                extra_state=extra_state
-            )
+            save_epoch_checkpoint(saved_ckpt_path, pointpillars, optimizer,
+                                  scheduler, completed_epoch, args,
+                                  extra_state)
 
         if epoch % 2 == 0:
             continue
@@ -418,6 +425,9 @@ def main(args):
                             scheduler, completed_epoch, args,
                             extra_state=extra_state)
         if early_stop_counter >= args.early_stop_patience:
+            save_epoch_checkpoint(saved_ckpt_path, pointpillars, optimizer,
+                                  scheduler, completed_epoch, args,
+                                  extra_state)
             print(
                 f'Early stopping at epoch {completed_epoch}. '
                 f'Best val total_loss {best_val_loss:.4f} was at epoch {best_epoch}.'
@@ -436,7 +446,7 @@ if __name__ == '__main__':
     parser.add_argument('--init_lr', type=float, default=0.00025)
     parser.add_argument('--max_epoch', type=int, default=160)
     parser.add_argument('--log_freq', type=int, default=8)
-    parser.add_argument('--ckpt_freq_epoch', type=int, default=20)
+    parser.add_argument('--ckpt_freq_epoch', type=int, default=10)
     parser.add_argument('--early_stop_patience', type=int, default=0,
                         help='validation checks without val total_loss improvement before stopping; 0 disables')
     parser.add_argument('--early_stop_min_delta', type=float, default=0.0,

@@ -63,12 +63,20 @@ class MultimodalPillarEncoder(PillarEncoder):
             nn.ReLU(inplace=False),
         )
         self.image_dropout = nn.Dropout(p=image_drop_prob)
-        self.image_gate = nn.Parameter(torch.full((1, out_channel, 1), init_image_gate))
+        # A content-dependent gate lets strong LiDAR features reject a locally
+        # misaligned image sample instead of applying the same image weight to
+        # every point and class.
+        self.image_gate = nn.Conv1d(2 * out_channel, out_channel, 1, bias=True)
         self.init_image_projection()
+        self.init_image_gate(init_image_gate)
 
     def init_image_projection(self):
         proj = self.image_proj[0]
         nn.init.normal_(proj.weight, mean=0.0, std=0.001)
+
+    def init_image_gate(self, init_image_gate):
+        nn.init.zeros_(self.image_gate.weight)
+        nn.init.constant_(self.image_gate.bias, init_image_gate)
 
     def sample_image_features(self, image_features, pillars, npoints_per_pillar,
                               coors_batch, batched_calib_info, batched_img_info):
@@ -119,6 +127,7 @@ class MultimodalPillarEncoder(PillarEncoder):
             y = uv[:, 1] * (resized_h - 1.0) / max(orig_h - 1.0, 1.0)
             in_image = (
                 (depth > eps) &
+                torch.isfinite(uv).all(dim=1) &
                 (uv[:, 0] >= 0.0) & (uv[:, 0] <= orig_w - 1.0) &
                 (uv[:, 1] >= 0.0) & (uv[:, 1] <= orig_h - 1.0) &
                 flat_valid
@@ -149,9 +158,10 @@ class MultimodalPillarEncoder(PillarEncoder):
         device = pillars.device
         lidar_pillars = pillars[:, :, :4]
         xyz = lidar_pillars[:, :, :3]
+        valid_count = npoints_per_pillar.clamp_min(1).to(dtype=xyz.dtype)
         offset_pt_center = xyz - torch.sum(
             xyz, dim=1, keepdim=True
-        ) / npoints_per_pillar[:, None, None]
+        ) / valid_count[:, None, None]
 
         x_offset_pi_center = xyz[:, :, :1] - (
             coors_batch[:, None, 1:2] * self.vx + self.x_offset
@@ -184,7 +194,9 @@ class MultimodalPillarEncoder(PillarEncoder):
         ).permute(0, 2, 1).contiguous()
         image_point_features = self.image_dropout(image_point_features)
         image_update = self.image_proj(image_point_features)
-        point_features = point_features + torch.sigmoid(self.image_gate) * image_update
+        gate_input = torch.cat([point_features, image_update], dim=1)
+        image_weight = torch.sigmoid(self.image_gate(gate_input))
+        point_features = point_features + image_weight * image_update
         point_features = point_features * mask[:, None, :]
         pooling_features = torch.max(point_features, dim=-1)[0]
 
