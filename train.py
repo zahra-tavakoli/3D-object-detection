@@ -137,6 +137,15 @@ def load_training_checkpoint(args, model, optimizer, scheduler, saved_ckpt_path)
     return start_epoch, None
 
 
+def add_sin_difference(bbox_pred, bbox_target):
+    """Encode yaw residual without mutating either angle before both terms exist."""
+    pred_yaw = bbox_pred[:, -1].clone()
+    target_yaw = bbox_target[:, -1].clone()
+    bbox_pred[:, -1] = torch.sin(pred_yaw) * torch.cos(target_yaw)
+    bbox_target[:, -1] = torch.cos(pred_yaw) * torch.sin(target_yaw)
+    return bbox_pred, bbox_target
+
+
 def main(args):
     if args.early_stop_patience < 0:
         raise ValueError('--early_stop_patience must be >= 0')
@@ -166,16 +175,34 @@ def main(args):
         pointpillars = model_cls(nclasses=args.nclasses).cuda()
     else:
         pointpillars = model_cls(nclasses=args.nclasses)
-    loss_func = Loss()
+    loss_func = Loss(alpha=args.focal_alpha, gamma=args.focal_gamma)
 
     max_iters = len(train_dataloader) * args.max_epoch
     init_lr = args.init_lr
-    optimizer = torch.optim.AdamW(params=pointpillars.parameters(), 
-                                  lr=init_lr, 
+    if args.multimodal:
+        image_params = list(pointpillars.image_branch.parameters())
+        fusion_params = list(pointpillars.pillar_encoder.image_proj.parameters()) + \
+            list(pointpillars.pillar_encoder.image_gate.parameters())
+        specialized_ids = {id(param) for param in image_params + fusion_params}
+        lidar_params = [
+            param for param in pointpillars.parameters()
+            if id(param) not in specialized_ids
+        ]
+        optimizer_params = [
+            {'params': image_params, 'lr': init_lr * 0.1, 'weight_decay': 1e-4},
+            {'params': fusion_params, 'lr': init_lr, 'weight_decay': 1e-2},
+            {'params': lidar_params, 'lr': init_lr * 0.4, 'weight_decay': 1e-2},
+        ]
+        max_lrs = [init_lr, init_lr * 10, init_lr * 4]
+    else:
+        optimizer_params = pointpillars.parameters()
+        max_lrs = init_lr * 10
+    optimizer = torch.optim.AdamW(params=optimizer_params,
+                                  lr=init_lr,
                                   betas=(0.95, 0.99),
                                   weight_decay=0.01)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer,  
-                                                    max_lr=init_lr*10, 
+                                                    max_lr=max_lrs,
                                                     total_steps=max_iters, 
                                                     pct_start=0.4, 
                                                     anneal_strategy='cos',
@@ -246,11 +273,15 @@ def main(args):
             # batched_dir_labels_weights = anchor_target_dict['batched_dir_labels_weights'].reshape(-1)
             
             pos_idx = (batched_bbox_labels >= 0) & (batched_bbox_labels < args.nclasses)
+            class_pos_counts = [
+                (batched_bbox_labels == class_id).sum()
+                for class_id in range(args.nclasses)
+            ]
             bbox_pred = bbox_pred[pos_idx]
             batched_bbox_reg = batched_bbox_reg[pos_idx]
-            # sin(a - b) = sin(a)*cos(b) - cos(a)*sin(b)
-            bbox_pred[:, -1] = torch.sin(bbox_pred[:, -1].clone()) * torch.cos(batched_bbox_reg[:, -1].clone())
-            batched_bbox_reg[:, -1] = torch.cos(bbox_pred[:, -1].clone()) * torch.sin(batched_bbox_reg[:, -1].clone())
+            bbox_pred, batched_bbox_reg = add_sin_difference(
+                bbox_pred, batched_bbox_reg
+            )
             bbox_dir_cls_pred = bbox_dir_cls_pred[pos_idx]
             batched_dir_labels = batched_dir_labels[pos_idx]
 
@@ -279,6 +310,15 @@ def main(args):
                 save_summary(writer, loss_dict, global_step, 'train',
                              lr=optimizer.param_groups[0]['lr'], 
                              momentum=optimizer.param_groups[0]['betas'][0])
+                if args.multimodal:
+                    for name, value in pointpillars.pillar_encoder.last_fusion_stats.items():
+                        writer.add_scalar(f'fusion/{name}', value, global_step)
+                for class_name, class_id in Kitti.CLASSES.items():
+                    writer.add_scalar(
+                        f'anchors/positive_{class_name.lower()}',
+                        class_pos_counts[class_id],
+                        global_step,
+                    )
                 tqdm.write(
                     f'[train] epoch: {epoch + 1}/{args.max_epoch}, '
                     f'step: {global_step}, {format_loss_log(loss_dict)}'
@@ -342,9 +382,9 @@ def main(args):
                 pos_idx = (batched_bbox_labels >= 0) & (batched_bbox_labels < args.nclasses)
                 bbox_pred = bbox_pred[pos_idx]
                 batched_bbox_reg = batched_bbox_reg[pos_idx]
-                # sin(a - b) = sin(a)*cos(b) - cos(a)*sin(b)
-                bbox_pred[:, -1] = torch.sin(bbox_pred[:, -1]) * torch.cos(batched_bbox_reg[:, -1])
-                batched_bbox_reg[:, -1] = torch.cos(bbox_pred[:, -1]) * torch.sin(batched_bbox_reg[:, -1])
+                bbox_pred, batched_bbox_reg = add_sin_difference(
+                    bbox_pred, batched_bbox_reg
+                )
                 bbox_dir_cls_pred = bbox_dir_cls_pred[pos_idx]
                 batched_dir_labels = batched_dir_labels[pos_idx]
 
@@ -444,6 +484,12 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--nclasses', type=int, default=3)
     parser.add_argument('--init_lr', type=float, default=0.00025)
+    parser.add_argument('--focal_alpha', type=float, nargs=3,
+                        default=[0.50, 0.35, 0.25],
+                        metavar=('PEDESTRIAN', 'CYCLIST', 'CAR'),
+                        help='positive focal-loss alpha for each class')
+    parser.add_argument('--focal_gamma', type=float, default=2.0,
+                        help='focal-loss focusing exponent')
     parser.add_argument('--max_epoch', type=int, default=160)
     parser.add_argument('--log_freq', type=int, default=8)
     parser.add_argument('--ckpt_freq_epoch', type=int, default=10)

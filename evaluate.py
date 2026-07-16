@@ -43,6 +43,13 @@ def move_data_to_cuda(data_dict):
                     value[j] = item.cuda()
 
 
+def load_evaluation_weights(model, checkpoint_path, device):
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        checkpoint = checkpoint['model_state_dict']
+    model.load_state_dict(checkpoint, strict=True)
+
+
 def format_result_to_arrays(format_result):
     return {
         'name': np.array(format_result['name']),
@@ -318,12 +325,10 @@ def main(args):
     model_cls = MultimodalPointPillars if args.multimodal else PointPillars
     if not args.no_cuda:
         model = model_cls(nclasses=args.nclasses).cuda()
-        model.load_state_dict(torch.load(args.ckpt), strict=not args.multimodal)
+        load_evaluation_weights(model, args.ckpt, torch.device('cuda'))
     else:
         model = model_cls(nclasses=args.nclasses)
-        model.load_state_dict(
-            torch.load(args.ckpt, map_location=torch.device('cpu')),
-            strict=not args.multimodal)
+        load_evaluation_weights(model, args.ckpt, torch.device('cpu'))
     
     saved_path = args.saved_path
     os.makedirs(saved_path, exist_ok=True)

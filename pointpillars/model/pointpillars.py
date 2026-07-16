@@ -260,10 +260,12 @@ class PointPillars(nn.Module):
         ]
 
         # val and test
-        self.nms_pre = 100
-        self.nms_thr = 0.01
-        self.score_thr = 0.1
-        self.max_num = 50
+        # Keep candidates per class so high-confidence cars cannot remove
+        # pedestrian/cyclist anchors before class-wise NMS.
+        self.nms_pre = 1000
+        self.nms_thr = [0.1, 0.1, 0.01]
+        self.score_thr = [0.05, 0.05, 0.1]
+        self.max_num = 100
 
     def get_predicted_bboxes_single(self, bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchors):
         '''
@@ -285,40 +287,36 @@ class PointPillars(nn.Module):
         bbox_cls_pred = torch.sigmoid(bbox_cls_pred)
         bbox_dir_cls_pred = torch.max(bbox_dir_cls_pred, dim=1)[1]
 
-        # 1. obtain self.nms_pre bboxes based on scores
-        inds = bbox_cls_pred.max(1)[0].topk(self.nms_pre)[1]
-        bbox_cls_pred = bbox_cls_pred[inds]
-        bbox_pred = bbox_pred[inds]
-        bbox_dir_cls_pred = bbox_dir_cls_pred[inds]
-        anchors = anchors[inds]
-
-        # 2. decode predicted offsets to bboxes
-        bbox_pred = anchors2bboxes(anchors, bbox_pred)
-
-        # 3. nms
-        bbox_pred2d_xy = bbox_pred[:, [0, 1]]
-        bbox_pred2d_lw = bbox_pred[:, [3, 4]]
-        bbox_pred2d = torch.cat([bbox_pred2d_xy - bbox_pred2d_lw / 2,
-                                 bbox_pred2d_xy + bbox_pred2d_lw / 2,
-                                 bbox_pred[:, 6:]], dim=-1) # (n_anchors, 5)
-
         ret_bboxes, ret_labels, ret_scores = [], [], []
         for i in range(self.nclasses):
-            # 3.1 filter bboxes with scores below self.score_thr
-            cur_bbox_cls_pred = bbox_cls_pred[:, i]
-            score_inds = cur_bbox_cls_pred > self.score_thr
-            if score_inds.sum() == 0:
+            # Select and threshold independently for each class.
+            cur_scores = bbox_cls_pred[:, i]
+            pre_count = min(self.nms_pre, cur_scores.numel())
+            cur_scores, class_inds = cur_scores.topk(pre_count)
+            score_thr = self.score_thr[i]
+            score_mask = cur_scores > score_thr
+            if score_mask.sum() == 0:
                 continue
 
-            cur_bbox_cls_pred = cur_bbox_cls_pred[score_inds]
-            cur_bbox_pred2d = bbox_pred2d[score_inds]
-            cur_bbox_pred = bbox_pred[score_inds]
-            cur_bbox_dir_cls_pred = bbox_dir_cls_pred[score_inds]
+            class_inds = class_inds[score_mask]
+            cur_bbox_cls_pred = cur_scores[score_mask]
+            cur_bbox_pred = anchors2bboxes(
+                anchors[class_inds], bbox_pred[class_inds]
+            )
+            cur_bbox_dir_cls_pred = bbox_dir_cls_pred[class_inds]
+            cur_bbox_pred2d_xy = cur_bbox_pred[:, [0, 1]]
+            cur_bbox_pred2d_lw = cur_bbox_pred[:, [3, 4]]
+            cur_bbox_pred2d = torch.cat(
+                [cur_bbox_pred2d_xy - cur_bbox_pred2d_lw / 2,
+                 cur_bbox_pred2d_xy + cur_bbox_pred2d_lw / 2,
+                 cur_bbox_pred[:, 6:]],
+                dim=-1,
+            )
             
             # 3.2 nms core
             keep_inds = nms_cuda(boxes=cur_bbox_pred2d, 
                                  scores=cur_bbox_cls_pred, 
-                                 thresh=self.nms_thr, 
+                                 thresh=self.nms_thr[i],
                                  pre_maxsize=None, 
                                  post_max_size=None)
 

@@ -36,9 +36,24 @@ class ImageFeatureNet(nn.Module):
         self.lateral4 = nn.Conv2d(512, out_channels, 1)
         self.smooth = nn.Sequential(
             nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels, eps=1e-3, momentum=0.01),
+            nn.GroupNorm(num_groups=8, num_channels=out_channels),
             nn.ReLU(inplace=True),
         )
+        self.freeze_backbone_batch_norm()
+
+    def freeze_backbone_batch_norm(self):
+        for module in (self.stem, self.layer1, self.layer2, self.layer3, self.layer4):
+            for child in module.modules():
+                if isinstance(child, nn.BatchNorm2d):
+                    child.eval()
+                    for parameter in child.parameters():
+                        parameter.requires_grad = False
+
+    def train(self, mode=True):
+        super().train(mode)
+        # model.train() must not re-enable noisy small-batch running statistics.
+        self.freeze_backbone_batch_norm()
+        return self
 
     def forward(self, imgs):
         x = self.stem(imgs)
@@ -56,7 +71,7 @@ class ImageFeatureNet(nn.Module):
 
 class MultimodalPillarEncoder(PillarEncoder):
     def __init__(self, voxel_size, point_cloud_range, in_channel, out_channel,
-                 image_drop_prob=0.2, init_image_gate=-4.0):
+                 image_drop_prob=0.05, init_image_gate=-2.0):
         super().__init__(voxel_size, point_cloud_range, in_channel, out_channel)
         self.image_proj = nn.Sequential(
             nn.Conv1d(out_channel, out_channel, 1, bias=False),
@@ -66,17 +81,25 @@ class MultimodalPillarEncoder(PillarEncoder):
         # A content-dependent gate lets strong LiDAR features reject a locally
         # misaligned image sample instead of applying the same image weight to
         # every point and class.
-        self.image_gate = nn.Conv1d(2 * out_channel, out_channel, 1, bias=True)
+        self.image_gate = nn.Sequential(
+            nn.Conv1d(2 * out_channel + 2, out_channel, 1, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Conv1d(out_channel, out_channel, 1, bias=True),
+        )
+        self.max_lidar_depth = max(float(point_cloud_range[3]), 1.0)
+        self.last_fusion_stats = {}
         self.init_image_projection()
         self.init_image_gate(init_image_gate)
 
     def init_image_projection(self):
         proj = self.image_proj[0]
-        nn.init.normal_(proj.weight, mean=0.0, std=0.001)
+        nn.init.kaiming_normal_(proj.weight, mode='fan_out', nonlinearity='relu')
 
     def init_image_gate(self, init_image_gate):
-        nn.init.zeros_(self.image_gate.weight)
-        nn.init.constant_(self.image_gate.bias, init_image_gate)
+        nn.init.kaiming_normal_(self.image_gate[0].weight, nonlinearity='relu')
+        nn.init.zeros_(self.image_gate[0].bias)
+        nn.init.zeros_(self.image_gate[2].weight)
+        nn.init.constant_(self.image_gate[2].bias, init_image_gate)
 
     def sample_image_features(self, image_features, pillars, npoints_per_pillar,
                               coors_batch, batched_calib_info, batched_img_info):
@@ -194,10 +217,32 @@ class MultimodalPillarEncoder(PillarEncoder):
         ).permute(0, 2, 1).contiguous()
         image_point_features = self.image_dropout(image_point_features)
         image_update = self.image_proj(image_point_features)
-        gate_input = torch.cat([point_features, image_update], dim=1)
+        depth_feature = (
+            torch.norm(xyz[:, :, :2], p=2, dim=-1) / self.max_lidar_depth
+        ).clamp(0.0, 1.0).unsqueeze(1)
+        density_feature = (
+            valid_count / float(pillars.size(1))
+        ).clamp(0.0, 1.0)[:, None, None].expand(-1, 1, pillars.size(1))
+        gate_input = torch.cat(
+            [point_features, image_update, depth_feature, density_feature], dim=1
+        )
         image_weight = torch.sigmoid(self.image_gate(gate_input))
+        lidar_features = point_features
         point_features = point_features + image_weight * image_update
         point_features = point_features * mask[:, None, :]
+        with torch.no_grad():
+            valid_mask = mask[:, None, :].expand_as(image_weight)
+            valid_gate = image_weight[valid_mask]
+            lidar_norm = torch.norm(lidar_features * mask[:, None, :], p=2)
+            image_norm = torch.norm(
+                image_weight * image_update * mask[:, None, :], p=2
+            )
+            self.last_fusion_stats = {
+                'gate_mean': valid_gate.mean().item(),
+                'gate_min': valid_gate.min().item(),
+                'gate_max': valid_gate.max().item(),
+                'image_to_lidar_norm': (image_norm / lidar_norm.clamp_min(1e-6)).item(),
+            }
         pooling_features = torch.max(point_features, dim=-1)[0]
 
         batched_canvas = []
