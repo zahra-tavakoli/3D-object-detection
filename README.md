@@ -1,148 +1,126 @@
-# [PointPillars: Fast Encoders for Object Detection from Point Clouds](https://arxiv.org/abs/1812.05784) 
+# Multimodal PointPillars for KITTI 3D Object Detection
 
-A Simple PointPillars PyTorch Implenmentation for 3D Lidar(KITTI) Detection. [[Zhihu](https://zhuanlan.zhihu.com/p/521277176)]
+This repository contains my work extending PointPillars for multimodal 3D object detection on the KITTI dataset. The project compares a LiDAR-only detector with a multimodal model that combines LiDAR pillars and camera image features.
 
-- It can be run without installing [Spconv](https://github.com/traveller59/spconv), [mmdet](https://github.com/open-mmlab/mmdetection) or [mmdet3d](https://github.com/open-mmlab/mmdetection3d). 
-- Only one detection network (PointPillars) was implemented in this repo, so the code may be more easy to read. 
-- Sincere thanks for the great open-source architectures [mmcv](https://github.com/open-mmlab/mmcv), [mmdet](https://github.com/open-mmlab/mmdetection) and [mmdet3d](https://github.com/open-mmlab/mmdetection3d), which helps me to learn 3D detetion and implement this repo.
+The main goal of this work is to study whether image information improves detection quality on difficult KITTI scenes and individual validation frames.
 
-## News
+## What I changed
 
-- **2025-02** Making PointPillars a python package out of the code is supported.
-- **2024-04** Exporting PointPillars to ONNX & TensorRT is supported on branch [feature/deployment](https://github.com/zhulf0804/PointPillars/tree/feature/deployment).
+- Added a multimodal PointPillars model using KITTI `image_2` data alongside LiDAR.
+- Added multimodal training and evaluation options through `--multimodal`.
+- Preserved the original LiDAR-only training and evaluation path for comparison.
+- Added experiment-specific checkpoints, logs, and evaluation outputs.
+- Added scripts for comparing LiDAR-only and multimodal predictions on individual samples.
+- Ranked validation frames where multimodal predictions improve over the LiDAR-only model.
 
-    ![](./figures/pytorch_trt.png)
+## Results
 
-## mAP on KITTI validation set (Easy, Moderate, Hard)
+The following results are from the evaluation outputs in this repository. Values are reported as Easy, Moderate, and Hard, respectively.
 
-| Repo | Metric | Overall | Pedestrian | Cyclist | Car |
-| :---: | :---: | :---: | :---: | :---: | :---: |
-| this repo | 3D-BBox | 73.3259 62.7834 59.6278 | 51.4642 47.9446 43.8040 | 81.8677 63.6617 60.9126 | 86.6456 76.7439 74.1668 | 
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | 3D-BBox  | 72.0537, 60.1114, 55.8320 | 52.0263, 46.4037, 42.4841 | 78.7231, 59.9526, 57.2489 | 85.4118, 73.9780, 67.7630 |
-| this repo | BEV | 77.8540 69.8003 66.6699 | 59.1687 54.3456 50.5023 | 84.4268 67.1409 63.7409 | 89.9664 87.9145 85.7664 | 
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | BEV | 76.6485, 67.7609, 64.5605 | 59.0778, 53.3638, 48.4230 | 80.9328, 63.3447, 60.0618 | 89.9348, 86.5743, 85.1967 |
-| this repo | 2D-BBox | 80.5097 74.6120 71.4758 | 64.6249 61.4201 57.5965 | 86.2569 73.0828 70.1726 | 90.6471 89.3330 86.6583 |
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | 2D-BBox | 78.4938, 73.4781, 70.3613 | 62.2413, 58.9157, 55.3660 | 82.6460, 72.3547, 68.4669 | 90.5939, 89.1638, 87.2511 |
-| this repo | AOS | 74.9647 68.1712 65.2817 | 49.3777 46.7284 43.8352 | 85.0412 69.1024 66.2801 | 90.4752 88.6828 85.7298 |
-| [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) | AOS | 72.41, 66.23, 63.55 | 46.00, 43.22, 40.94 | 80.85, 67.20, 63.63 | 90.37, 88.27, 86.07 |
+| Metric | LiDAR-only | Multimodal |
+| --- | ---: | ---: |
+| 2D AP | 69.31 / 58.50 / 57.14 | **73.43 / 65.12 / 60.68** |
+| BEV AP | 66.64 / 56.15 / 52.51 | **66.77 / 56.39 / 53.39** |
+| 3D AP | **58.41 / 47.54 / 45.85** | 58.32 / **47.97** / 44.00 |
+| AOS AP | 58.39 / 49.23 / 47.90 | **61.57 / 53.86 / 50.23** |
 
-- **Note: Here, we report [mmdet3d v0.18.1](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1) (2022/02/09-2022/03/01) performance based on the officially provided [checkpoint](https://github.com/open-mmlab/mmdetection3d/tree/v0.18.1/configs/pointpillars#kitti). Much improvements were made in the [mmdet3d v1.0.0rc1](https://github.com/open-mmlab/mmdetection3d/tree/v1.0.0rc1)**. 
+These aggregate metrics are complemented by frame-level analysis. The files under `comparison_results/` rank validation samples by true-positive gain, false-positive reduction, and F1 improvement.
 
-## Detection Visualization
+## Repository highlights
 
-![](./figures/pc_pred_000134.png)
-![](./figures/img_3dbbox_000134.png)
+| Path | Purpose |
+| --- | --- |
+| `train.py` | Train LiDAR-only or multimodal PointPillars |
+| `evaluate.py` | Evaluate a checkpoint on KITTI |
+| `test.py` | Run inference on individual samples |
+| `compare_sample_results.py` | Compare predictions frame by frame |
+| `rank_test_predictions.py` | Rank samples by multimodal improvement |
+| `POINTPILLARS_RUN_README.md` | Detailed setup and experiment commands |
+| `comparison_results/` | CSV comparisons and ranked examples |
+| `outs/` | Training logs, summaries, and checkpoints |
+| `results_*/` | Evaluation and submission outputs |
+| `test_outputs/` | Selected qualitative comparison outputs |
 
-## [Install] 
+## Setup
 
-Install PointPillars as a python package and all its dependencies as follows:
+Prepare a KITTI object detection dataset with this structure:
 
+```text
+kitti/
+  training/
+    calib/
+    image_2/
+    label_2/
+    velodyne/
+  testing/
+    calib/
+    image_2/
+    velodyne/
 ```
-cd PointPillars/
+
+Install the dependencies and build the local operators:
+
+```bash
 pip install -r requirements.txt
 python setup.py build_ext --inplace
 pip install .
 ```
 
-## [Datasets]
+Preprocess the dataset:
 
-1. Download
-
-    Download [point cloud](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_velodyne.zip)(29GB), [images](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_image_2.zip)(12 GB), [calibration files](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_calib.zip)(16 MB)和[labels](https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_label_2.zip)(5 MB)。Format the datasets as follows:
-    ```
-    kitti
-        |- training
-            |- calib (#7481 .txt)
-            |- image_2 (#7481 .png)
-            |- label_2 (#7481 .txt)
-            |- velodyne (#7481 .bin)
-        |- testing
-            |- calib (#7518 .txt)
-            |- image_2 (#7518 .png)
-            |- velodyne (#7518 .bin)
-    ```
-
-2. Pre-process KITTI datasets First
-
-    ```
-    cd PointPillars/
-    python pre_process_kitti.py --data_root your_path_to_kitti
-    ```
-
-    Now, we have datasets as follows:
-    ```
-    kitti
-        |- training
-            |- calib (#7481 .txt)
-            |- image_2 (#7481 .png)
-            |- label_2 (#7481 .txt)
-            |- velodyne (#7481 .bin)
-            |- velodyne_reduced (#7481 .bin)
-        |- testing
-            |- calib (#7518 .txt)
-            |- image_2 (#7518 .png)
-            |- velodyne (#7518 .bin)
-            |- velodyne_reduced (#7518 .bin)
-        |- kitti_gt_database (# 19700 .bin)
-        |- kitti_infos_train.pkl
-        |- kitti_infos_val.pkl
-        |- kitti_infos_trainval.pkl
-        |- kitti_infos_test.pkl
-        |- kitti_dbinfos_train.pkl
-    ```
-
-## [Training]
-
-```
-cd PointPillars/
-python train.py --data_root your_path_to_kitti
+```bash
+python pre_process_kitti.py --data_root /path/to/kitti
 ```
 
-## [Evaluation]
+## Run the experiments
 
-```
-cd PointPillars/
-python evaluate.py --ckpt pretrained/epoch_160.pth --data_root your_path_to_kitti 
-```
+Train the LiDAR-only baseline:
 
-## [Test]
-
-```
-cd PointPillars/
-
-# 1. infer and visualize point cloud detection
-python test.py --ckpt pretrained/epoch_160.pth --pc_path your_pc_path 
-
-# 2. infer and visualize point cloud detection and gound truth.
-python test.py --ckpt pretrained/epoch_160.pth --pc_path your_pc_path --calib_path your_calib_path  --gt_path your_gt_path
-
-# 3. infer and visualize point cloud & image detection
-python test.py --ckpt pretrained/epoch_160.pth --pc_path your_pc_path --calib_path your_calib_path --img_path your_img_path
-
-
-e.g. 
-a. [infer on val set 000134]
-
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/val/000134.bin
-
-or
-
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/val/000134.bin \
-               --calib_path pointpillars/dataset/demo_data/val/000134.txt \
-               --img_path pointpillars/dataset/demo_data/val/000134.png \
-               --gt_path pointpillars/dataset/demo_data/val/000134_gt.txt
-
-b. [infer on test set 000002]
-
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/test/000002.bin
-
-or 
-
-python test.py --ckpt pretrained/epoch_160.pth --pc_path pointpillars/dataset/demo_data/test/000002.bin \
-               --calib_path pointpillars/dataset/demo_data/test/000002.txt \
-               --img_path pointpillars/dataset/demo_data/test/000002.png
+```bash
+python train.py \
+  --data_root /path/to/kitti \
+  --saved_path pillar_logs_lidar
 ```
 
-## Acknowledements
+Train the multimodal model:
 
-Thanks for the open source code [mmcv](https://github.com/open-mmlab/mmcv), [mmdet](https://github.com/open-mmlab/mmdetection) and [mmdet3d](https://github.com/open-mmlab/mmdetection3d).
+```bash
+python train.py \
+  --data_root /path/to/kitti \
+  --saved_path pillar_logs_multimodal \
+  --multimodal \
+  --batch_size 2
+```
+
+Evaluate a LiDAR-only checkpoint:
+
+```bash
+python evaluate.py \
+  --data_root /path/to/kitti \
+  --ckpt pretrained/epoch_160.pth \
+  --saved_path results_lidar_noaug
+```
+
+Evaluate a multimodal checkpoint:
+
+```bash
+python evaluate.py \
+  --data_root /path/to/kitti \
+  --ckpt pillar_logs_multimodal/checkpoints/epoch_160.pth \
+  --saved_path results_mm_noaug \
+  --multimodal
+```
+
+For complete environment notes, troubleshooting, and experiment details, see [POINTPILLARS_RUN_README.md](POINTPILLARS_RUN_README.md).
+
+## Reproducibility notes
+
+- Multimodal training reads camera images from KITTI `image_2`.
+- The image branch resizes images to `384x1280` before feature extraction.
+- Multimodal training uses geometry-aware LiDAR augmentation and samples image features using the original point coordinates.
+- Multimodal training may require a smaller batch size because of the additional image branch.
+- The generated KITTI dataset, checkpoints, and large prediction artifacts are not required to understand the source changes and may be excluded from a public GitHub upload when repository size is a concern.
+
+## Acknowledgment
+
+This work is based on the open-source PointPillars implementation by [zhulf0804](https://github.com/zhulf0804/PointPillars), which implements the method from [PointPillars: Fast Encoders for Object Detection from Point Clouds](https://arxiv.org/abs/1812.05784). The original project and its license remain acknowledged here; the multimodal extensions and experiment analysis in this repository are my work.
