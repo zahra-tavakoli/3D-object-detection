@@ -26,6 +26,22 @@ The following results are from the evaluation outputs in this repository. Values
 
 These aggregate metrics are complemented by frame-level analysis. The files under `comparison_results/` rank validation samples by true-positive gain, false-positive reduction, and F1 improvement.
 
+## Qualitative comparison: sample 003855
+
+The following KITTI validation sample compares the LiDAR-only prediction with the multimodal prediction. The multimodal model uses the same LiDAR scene together with camera features and produces a different set of image-aligned detections in the foreground.
+
+| LiDAR-only | Multimodal |
+| --- | --- |
+| ![LiDAR-only camera-view prediction for sample 003855](figures/sample_003855_lidar.png) | ![Multimodal camera-view prediction for sample 003855](figures/sample_003855_multimodal.png) |
+
+The corresponding bird's-eye-view outputs are shown below:
+
+| LiDAR-only BEV | Multimodal BEV |
+| --- | --- |
+| ![LiDAR-only BEV prediction for sample 003855](figures/sample_003855_lidar_bev.png) | ![Multimodal BEV prediction for sample 003855](figures/sample_003855_multimodal_bev.png) |
+
+This sample is included as a qualitative example; aggregate metrics and ranked frame comparisons are reported separately above and in `comparison_results/`.
+
 ## Repository highlights
 
 | Path | Purpose |
